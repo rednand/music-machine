@@ -1,0 +1,80 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+const NAV_ITEMS = [
+  { href: "/", label: "Descobrir" },
+  { href: "/years", label: "Eras" }
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  return (
+    <div className="relative min-h-full">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(900px 620px at 82% -6%, rgba(209,20,90,0.16), transparent 62%), radial-gradient(760px 560px at 4% 12%, rgba(109,92,224,0.16), transparent 60%), radial-gradient(1100px 700px at 60% 74%, rgba(13,122,92,0.11), transparent 62%), radial-gradient(700px 500px at 12% 96%, rgba(255,178,102,0.13), transparent 60%)"
+        }}
+      />
+
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center justify-between border-r border-[#171420]/[0.08] bg-white/50 py-5 pb-6 backdrop-blur-xl md:flex">
+        <Link
+          href="/"
+          aria-label="Descobrir"
+          className="flex h-[38px] w-[38px] items-center justify-center rounded-full shadow-[0_8px_20px_-8px_rgba(209,20,90,0.6)]"
+          style={{ background: "linear-gradient(150deg, #ff7fae, #d1145a)" }}
+        >
+          <span className="h-3 w-3 rounded-full border-2 border-white/95" />
+        </Link>
+
+        <nav className="flex flex-col items-center gap-8 font-mono text-[9.5px] tracking-[0.26em]">
+          {NAV_ITEMS.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "[writing-mode:vertical-rl] transition-colors hover:text-[#d1145a]",
+                  active ? "text-[#d1145a]" : "text-[#6b6577]"
+                )}
+              >
+                {item.label.toUpperCase()}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="font-mono text-[9.5px] tracking-[0.26em] text-[#a8a2b0] [writing-mode:vertical-rl]">
+          1980 — HOJE
+        </div>
+      </aside>
+
+      <main className="relative z-10 pb-16 md:pb-0 md:pl-[76px]">{children}</main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#171420]/[0.08] bg-white/70 p-2 backdrop-blur-xl md:hidden">
+        {NAV_ITEMS.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "px-4 py-1 font-mono text-[10px] tracking-[0.18em] transition-colors",
+                active ? "text-[#d1145a]" : "text-[#6b6577]"
+              )}
+            >
+              {item.label.toUpperCase()}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}

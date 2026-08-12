@@ -1,0 +1,24 @@
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/font/google", () => ({
+  Playfair_Display: () => ({ variable: "--font-serif" }),
+  IBM_Plex_Mono: () => ({ variable: "--font-mono" }),
+  Work_Sans: () => ({ variable: "--font-sans" })
+}));
+
+describe("RootLayout", () => {
+  it("declares pt-BR metadata for the product", async () => {
+    const { metadata } = await import("./layout.js");
+
+    expect(metadata.title).toBe("Music Time Machine");
+    expect(metadata.description).toMatch(/álbuns/i);
+  });
+
+  it("renders the AppShell around its children", async () => {
+    const RootLayout = (await import("./layout.js")).default;
+    const element = RootLayout({ children: <p>conteúdo</p> });
+
+    const htmlProps = element.props;
+    expect(htmlProps.lang).toBe("pt-BR");
+  });
+});

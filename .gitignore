@@ -1,0 +1,6 @@
+# Agent folder may store credentials, auth tokens, or other identifying/private artifacts
+.claude/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

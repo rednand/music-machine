@@ -8,6 +8,8 @@ const CARD_LAYOUTS = [
   { left: "16%", top: 352, width: "38%", rotate: -1.5 }
 ];
 
+export const MAX_FEATURED_CARDS = CARD_LAYOUTS.length;
+
 export function FeaturedAlbumCard({ entry, index }: { entry: DiscoveryPageEntry; index: number }) {
   const layout = CARD_LAYOUTS[index % CARD_LAYOUTS.length];
 

@@ -18,7 +18,7 @@ export default async function DiscoverPage() {
             <span className="h-[5px] w-[5px] rounded-full bg-[#0d7a5c]" />
             MÁQUINA DO TEMPO · CONTEXTO DE ÁLBUNS
           </div>
-          <h1 className="mt-[30px] max-w-full font-heading text-[clamp(40px,6.2vw,120px)] font-bold leading-[0.84] tracking-[-0.05em] text-[#120f18]">
+          <h1 className="mt-[30px] max-w-full font-heading text-[clamp(40px,6.2vw,120px)] font-extrabold leading-[0.84] tracking-[-0.05em] text-[#120f18]">
             <span className="block w-fit max-w-full">
               <span className="block">VIAJE</span>
               <span className="ml-[0.36em] block whitespace-nowrap text-[#d1145a]">NO TEMPO</span>

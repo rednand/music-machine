@@ -13,7 +13,7 @@ const playfairDisplay = Playfair_Display({
 const syne = Syne({
   variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["700", "800"],
+  weight: ["800"],
   fallback: ["sans-serif"],
 });
 

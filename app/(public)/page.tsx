@@ -9,22 +9,23 @@ export default async function DiscoverPage() {
 
   const covers = result.state === "ready" ? result.collection.slice(0, 4) : [];
   const ticker = result.state === "ready" ? result.collection.slice(0, 3) : [];
-  const artistCount = result.state === "ready" ? new Set(result.collection.map((entry) => entry.artistName)).size : 0;
 
   return (
     <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:px-[clamp(24px,4vw,72px)] md:pl-[clamp(104px,9vw,140px)]">
-      <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(220px,360px)] md:gap-[clamp(28px,4vw,60px)]">
+      <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(190px,340px)] md:gap-[clamp(24px,3vw,56px)]">
         <div>
           <div className="inline-flex items-center gap-[10px] font-mono text-[10.5px] tracking-[0.26em] text-[#0d7a5c]">
             <span className="h-[5px] w-[5px] rounded-full bg-[#0d7a5c]" />
             MÁQUINA DO TEMPO · CONTEXTO DE ÁLBUNS
           </div>
-          <h1 className="mt-[34px] font-serif text-[clamp(50px,7.4vw,118px)] font-bold leading-[0.94] tracking-[-0.035em] text-[#120f18]">
-            Escolha um ano
-            <span className="block pl-[0.06em] font-medium italic tracking-[-0.02em] text-[#d1145a]">
-              e viaje no tempo
+          <h1 className="mt-[30px] max-w-full font-heading text-[clamp(40px,6.2vw,120px)] font-bold leading-[0.84] tracking-[-0.05em] text-[#120f18]">
+            <span className="block w-fit max-w-full">
+              <span className="block">VIAJE</span>
+              <span className="ml-[0.36em] block whitespace-nowrap text-[#d1145a]">NO TEMPO</span>
+              <span className="mt-[0.5em] block text-right text-[0.24em] font-normal italic leading-[1.2] tracking-[-0.01em] text-[#443f4f]">
+                através da música
+              </span>
             </span>
-            <span className="block text-[#120f18]">pela música.</span>
           </h1>
           <p className="mt-10 max-w-[520px] text-[19px] font-light leading-[1.6] text-[#443f4f]">
             O que acontecia na vida do artista, no mundo e nas paradas quando o disco caiu — e como ele
@@ -43,20 +44,10 @@ export default async function DiscoverPage() {
         </div>
 
         {result.state === "ready" && (
-          <div className="flex flex-col items-end gap-[30px]">
-            <div className="grid w-full max-w-[340px] grid-cols-2 gap-3">
-              {covers.map((entry) => (
-                <FeaturedAlbumCard key={entry.albumId} entry={entry} />
-              ))}
-            </div>
-            <div className="flex gap-[10px]">
-              <span className="rounded-full border border-[#5a4ddb]/30 bg-white/60 px-[18px] py-[10px] font-mono text-[10px] tracking-[0.18em] text-[#5a4ddb] backdrop-blur-md">
-                {result.collection.length} {result.collection.length === 1 ? "ÁLBUM" : "ÁLBUNS"}
-              </span>
-              <span className="rounded-full border border-[#0d7a5c]/30 bg-white/60 px-[18px] py-[10px] font-mono text-[10px] tracking-[0.18em] text-[#0d7a5c] backdrop-blur-md">
-                {artistCount} {artistCount === 1 ? "ARTISTA" : "ARTISTAS"}
-              </span>
-            </div>
+          <div className="relative min-h-[470px] w-full">
+            {covers.map((entry, index) => (
+              <FeaturedAlbumCard key={entry.albumId} entry={entry} index={index} />
+            ))}
           </div>
         )}
       </div>
@@ -82,7 +73,7 @@ export default async function DiscoverPage() {
       {result.state === "ready" && (
         <>
           <div className="mt-24 flex items-end justify-between">
-            <h2 className="font-serif text-[54px] font-bold tracking-[-0.03em] text-[#120f18]">O acervo</h2>
+            <h2 className="font-heading text-[46px] font-extrabold tracking-[-0.025em] text-[#120f18]">O acervo</h2>
             <span className="font-mono text-[10px] tracking-[0.26em] text-[#a8a2b0]">ROLE E ESCOLHA</span>
           </div>
           <div className="mt-9">

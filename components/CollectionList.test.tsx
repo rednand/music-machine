@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { CollectionList } from "./CollectionList";
 
@@ -49,5 +50,38 @@ describe("CollectionList", () => {
     const { container } = render(<CollectionList entries={[]} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  const threeEntries = [
+    { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
+    { albumId: "album-2", title: "Nevermind", artistName: "Nirvana", releaseYear: "1991", hook: null },
+    { albumId: "album-3", title: "The Miseducation of Lauryn Hill", artistName: "Lauryn Hill", releaseYear: "1998", hook: null }
+  ];
+
+  it("shows only the preview count by default with a 'ver o acervo inteiro' action", () => {
+    render(<CollectionList entries={threeEntries} previewCount={2} />);
+
+    expect(screen.getByRole("heading", { name: "True Blue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nevermind" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /miseducation/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ver o acervo inteiro/i })).toBeInTheDocument();
+  });
+
+  it("reveals the rest of the collection when 'ver o acervo inteiro' is activated", async () => {
+    const user = userEvent.setup();
+    render(<CollectionList entries={threeEntries} previewCount={2} />);
+
+    await user.click(screen.getByRole("button", { name: /ver o acervo inteiro/i }));
+
+    expect(screen.getByRole("heading", { name: /miseducation/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ver o acervo inteiro/i })).not.toBeInTheDocument();
+  });
+
+  it("shows every entry with no 'ver o acervo inteiro' action when entries are at or below the preview count", () => {
+    render(<CollectionList entries={threeEntries.slice(0, 2)} previewCount={2} />);
+
+    expect(screen.getByRole("heading", { name: "True Blue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nevermind" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ver o acervo inteiro/i })).not.toBeInTheDocument();
   });
 });

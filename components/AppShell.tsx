@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Descobrir" },
+  { href: "/", label: "Acervo" },
   { href: "/years", label: "Eras" }
 ];
 
@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center justify-between border-r border-[#171420]/[0.08] bg-white/50 py-5 pb-6 backdrop-blur-xl md:flex">
         <Link
           href="/"
-          aria-label="Descobrir"
+          aria-label="Acervo"
           className="flex h-[38px] w-[38px] items-center justify-center rounded-full shadow-[0_8px_20px_-8px_rgba(209,20,90,0.6)]"
           style={{ background: "linear-gradient(150deg, #ff7fae, #d1145a)" }}
         >
@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="relative z-10 pb-16 md:pb-0 md:pl-[76px]">{children}</main>
+      <main className="relative z-10 pb-16 md:pb-0">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#171420]/[0.08] bg-white/70 p-2 backdrop-blur-xl md:hidden">
         {NAV_ITEMS.map((item) => {

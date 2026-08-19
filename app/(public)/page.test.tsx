@@ -40,7 +40,24 @@ describe("DiscoverPage", () => {
     expect(screen.getAllByRole("link", { name: /true blue/i })[0]).toHaveAttribute("href", "/albums/album-1");
   });
 
-  it("shows album/artist count badges and a clickable ticker of recent entries", async () => {
+  it("renders the two-line hero title with an accent second line and an italic tagline", async () => {
+    vi.spyOn(discoveryAction, "getDiscoveryPage").mockResolvedValue({
+      state: "ready",
+      featured: { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
+      collection: [{ albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null }]
+    });
+
+    const element = await DiscoverPage();
+    render(element);
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent(/VIAJE\s*NO TEMPO/i);
+    expect(screen.getByText("NO TEMPO").tagName).toBe("SPAN");
+    expect(screen.getByText(/através da música/i)).toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toBeInTheDocument();
+  });
+
+  it("shows a clickable ticker of recent entries and no longer shows count badges", async () => {
     vi.spyOn(discoveryAction, "getDiscoveryPage").mockResolvedValue({
       state: "ready",
       featured: { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
@@ -53,9 +70,42 @@ describe("DiscoverPage", () => {
     const element = await DiscoverPage();
     render(element);
 
-    expect(screen.getByText(/2 álbuns/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 artistas/i)).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /nevermind/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\d+\s*álbuns?/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+\s*artistas?/i)).not.toBeInTheDocument();
+  });
+
+  it("renders the featured albums as an overlapping stack sized to the catalog", async () => {
+    vi.spyOn(discoveryAction, "getDiscoveryPage").mockResolvedValue({
+      state: "ready",
+      featured: { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
+      collection: [
+        { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
+        { albumId: "album-2", title: "Nevermind", artistName: "Nirvana", releaseYear: "1991", hook: null },
+        { albumId: "album-3", title: "OK Computer", artistName: "Radiohead", releaseYear: "1997", hook: null }
+      ]
+    });
+
+    const element = await DiscoverPage();
+    render(element);
+
+    expect(screen.getAllByRole("link", { name: /true blue/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText("RADIOHEAD")).toBeInTheDocument();
+    expect(screen.getAllByText("1986").length).toBeGreaterThan(0);
+  });
+
+  it("degrades the featured stack to a single card when the catalog has exactly one album", async () => {
+    const entry = { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null };
+    vi.spyOn(discoveryAction, "getDiscoveryPage").mockResolvedValue({
+      state: "ready",
+      featured: entry,
+      collection: [entry]
+    });
+
+    const element = await DiscoverPage();
+    render(element);
+
+    expect(screen.getAllByText("MADONNA").length).toBe(1);
   });
 
   it("shows an inviting empty state guiding the visitor to search when the catalog has zero albums", async () => {

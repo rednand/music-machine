@@ -14,12 +14,10 @@ import { OtherAlbumsByArtist } from "@/components/OtherAlbumsByArtist";
 
 function NumberedSection({
   id,
-  number,
   title,
   children
 }: {
   id: string;
-  number: string;
   title: string;
   children: React.ReactNode;
 }) {
@@ -29,13 +27,7 @@ function NumberedSection({
       className="relative mb-8 overflow-hidden rounded-xl border border-white/90 bg-white/50 p-8 backdrop-blur-xl"
       style={{ boxShadow: "0 34px 60px -44px rgba(23,20,32,0.35)" }}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-6 top-2 select-none font-serif text-[110px] font-bold leading-none text-[#171420]/[0.06]"
-      >
-        {number}
-      </div>
-      <h2 className="relative z-10 mb-5 font-serif text-2xl font-bold text-[#120f18]">{title}</h2>
+      <h2 className="relative z-10 mb-5 font-heading text-2xl font-extrabold text-[#120f18]">{title}</h2>
       <div className="relative z-10">{children}</div>
     </section>
   );
@@ -79,7 +71,7 @@ export default async function AlbumPage({
       </div>
 
       <div className="mt-10">
-        <NumberedSection id="album" number="01" title="O álbum">
+        <NumberedSection id="album" title="O álbum">
           <AlbumInfoCards releaseDate={body.header.releaseDate} label={body.header.label} credits={body.credits} />
           <div className="mt-6">
             <TrackList tracks={body.tracks} highlightedTrackId={track} />
@@ -88,40 +80,40 @@ export default async function AlbumPage({
         </NumberedSection>
 
         <div id="artista">
-          <NarrativeSection number="02" title="O momento do artista" statements={body.artistMoment} />
+          <NarrativeSection title="O momento do artista" statements={body.artistMoment} />
         </div>
 
         <div id="mundo">
-          <NarrativeSection number="03" title={`O mundo em ${year}`} statements={body.worldContext} />
+          <NarrativeSection title={`O mundo em ${year}`} statements={body.worldContext} />
         </div>
 
         <div id="cenario">
-          <NarrativeSection number="04" title="O cenário musical" statements={body.musicalScene} />
+          <NarrativeSection title="O cenário musical" statements={body.musicalScene} />
         </div>
 
-        <NumberedSection id="desempenho" number="05" title="Desempenho">
+        <NumberedSection id="desempenho" title="Desempenho">
           <PerformancePanel records={body.performance} />
         </NumberedSection>
 
         <div id="legado">
-          <NarrativeSection number="06" title="Recepção então x legado hoje" statements={body.receptionVsLegacy} />
+          <NarrativeSection title="Recepção então x legado hoje" statements={body.receptionVsLegacy} />
         </div>
 
-        <NumberedSection id="influencia" number="07" title="Influência">
+        <NumberedSection id="influencia" title="Influência">
           <InfluenceList influences={body.influence} />
         </NumberedSection>
 
-        <NumberedSection id="curiosidades" number="08" title="Curiosidades">
+        <NumberedSection id="curiosidades" title="Curiosidades">
           <CuriositiesList curiosities={body.curiosities} />
         </NumberedSection>
 
-        <NumberedSection id="linha-do-tempo" number="09" title={`Linha do tempo de ${body.header.artist}`}>
+        <NumberedSection id="linha-do-tempo" title={`Linha do tempo de ${body.header.artist}`}>
           <OtherAlbumsByArtist albums={body.otherAlbumsByArtist} />
         </NumberedSection>
 
         {body.recommendations.length > 0 && (
           <section className="mt-16">
-            <h2 className="mb-6 font-serif text-[32px] font-bold tracking-[-0.02em] text-[#120f18]">
+            <h2 className="mb-6 font-heading text-[32px] font-extrabold tracking-[-0.02em] text-[#120f18]">
               Explore também
             </h2>
             <RecommendationsList recommendations={body.recommendations} />

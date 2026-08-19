@@ -55,27 +55,4 @@ describe("NarrativeSection", () => {
     expect(screen.getByText(/source-1/)).toBeInTheDocument();
     expect(screen.getByText(/source-2/)).toBeInTheDocument();
   });
-
-  it("renders an optional ghost section number when provided", () => {
-    render(
-      <NarrativeSection
-        title="O momento do artista"
-        number="02"
-        statements={[{ text: "Texto.", kind: "fact", sourceIds: [] }]}
-      />
-    );
-
-    expect(screen.getByText("02")).toBeInTheDocument();
-  });
-
-  it("renders no ghost number when the number prop is omitted", () => {
-    render(
-      <NarrativeSection
-        title="O momento do artista"
-        statements={[{ text: "Texto.", kind: "fact", sourceIds: [] }]}
-      />
-    );
-
-    expect(screen.queryByText("02")).not.toBeInTheDocument();
-  });
 });

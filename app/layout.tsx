@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Playfair_Display, Work_Sans } from "next/font/google";
+import { IBM_Plex_Mono, Playfair_Display, Syne, Work_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import "./globals.css";
@@ -8,6 +8,13 @@ const playfairDisplay = Playfair_Display({
   variable: "--font-serif",
   subsets: ["latin"],
   style: ["normal", "italic"],
+});
+
+const syne = Syne({
+  variable: "--font-heading",
+  subsets: ["latin"],
+  weight: ["800"],
+  fallback: ["sans-serif"],
 });
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -31,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="pt-BR"
-      className={`${playfairDisplay.variable} ${ibmPlexMono.variable} ${workSans.variable} h-full antialiased`}
+      className={`${playfairDisplay.variable} ${syne.variable} ${ibmPlexMono.variable} ${workSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#f7f4f1] font-sans text-[#171420]">
         <AppShell>{children}</AppShell>

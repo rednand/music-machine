@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/font/google", () => ({
   Playfair_Display: () => ({ variable: "--font-serif" }),
+  Syne: () => ({ variable: "--font-heading" }),
   IBM_Plex_Mono: () => ({ variable: "--font-mono" }),
   Work_Sans: () => ({ variable: "--font-sans" })
 }));

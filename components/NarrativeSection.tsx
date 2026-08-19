@@ -4,12 +4,10 @@ const UNCERTAIN_KINDS: NarrativeStatement["kind"][] = ["interpretation", "critic
 
 export function NarrativeSection({
   title,
-  statements,
-  number
+  statements
 }: {
   title: string;
   statements: NarrativeStatement[];
-  number?: string;
 }) {
   if (statements.length === 0) {
     return null;
@@ -29,15 +27,7 @@ export function NarrativeSection({
       className="relative mb-8 overflow-hidden rounded-xl border border-white/90 bg-white/50 p-8 backdrop-blur-xl"
       style={{ boxShadow: "0 34px 60px -44px rgba(23,20,32,0.35)" }}
     >
-      {number && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute right-6 top-2 select-none font-serif text-[110px] font-bold leading-none text-[#171420]/[0.06]"
-        >
-          {number}
-        </div>
-      )}
-      <h2 className="relative z-10 mb-5 font-serif text-2xl font-bold text-[#120f18]">{title}</h2>
+      <h2 className="relative z-10 mb-5 font-heading text-2xl font-extrabold text-[#120f18]">{title}</h2>
       <p className="relative z-10 font-sans text-[17px] font-light leading-relaxed text-[#443f4f]">
         {statements.map((statement, index) => (
           <span key={index}>

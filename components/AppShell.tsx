@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="relative z-10 pb-16 md:pb-0">{children}</main>
+      <main className="relative z-10 pb-16 md:pb-0 md:pl-[clamp(104px,9vw,140px)]">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#171420]/[0.08] bg-white/70 p-2 backdrop-blur-xl md:hidden">
         {NAV_ITEMS.map((item) => {

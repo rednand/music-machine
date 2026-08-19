@@ -1,4 +1,5 @@
 import type { NarrativeStatement } from "@/app/lib/ai/narrative";
+import { SectionCard } from "@/components/SectionCard";
 
 const UNCERTAIN_KINDS: NarrativeStatement["kind"][] = ["interpretation", "critical_opinion", "unconfirmed"];
 
@@ -23,12 +24,8 @@ export function NarrativeSection({
   }
 
   return (
-    <section
-      className="relative mb-8 overflow-hidden rounded-xl border border-white/90 bg-white/50 p-8 backdrop-blur-xl"
-      style={{ boxShadow: "0 34px 60px -44px rgba(23,20,32,0.35)" }}
-    >
-      <h2 className="relative z-10 mb-5 font-heading text-2xl font-extrabold text-[#120f18]">{title}</h2>
-      <p className="relative z-10 font-sans text-[17px] font-light leading-relaxed text-[#443f4f]">
+    <SectionCard title={title}>
+      <p className="font-sans text-[17px] font-light leading-relaxed text-[#443f4f]">
         {statements.map((statement, index) => (
           <span key={index}>
             <span
@@ -52,10 +49,10 @@ export function NarrativeSection({
         ))}
       </p>
       {sourceOrder.length > 0 && (
-        <p className="relative z-10 mt-4 font-mono text-[10px] tracking-[0.05em] text-[#a8a2b0]">
+        <p className="mt-4 font-mono text-[10px] tracking-[0.05em] text-[#a8a2b0]">
           Fontes: {sourceOrder.map((sourceId, index) => `[${index + 1}] ${sourceId}`).join("  ")}
         </p>
       )}
-    </section>
+    </SectionCard>
   );
 }

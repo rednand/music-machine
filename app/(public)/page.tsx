@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { getDiscoveryPage } from "@/app/actions/discovery";
 import { SearchForm } from "@/components/SearchForm";
-import { FeaturedAlbumCard } from "@/components/FeaturedAlbumCard";
+import { FeaturedAlbumCard, MAX_FEATURED_CARDS } from "@/components/FeaturedAlbumCard";
 import { CollectionList } from "@/components/CollectionList";
 
 export default async function DiscoverPage() {
   const result = await getDiscoveryPage();
 
-  const covers = result.state === "ready" ? result.collection.slice(0, 4) : [];
-  const ticker = result.state === "ready" ? result.collection.slice(0, 3) : [];
+  const covers = result.state === "ready" ? result.collection.slice(0, MAX_FEATURED_CARDS) : [];
+  const ticker = covers.slice(0, 3);
 
   return (
-    <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:px-[clamp(24px,4vw,72px)] md:pl-[clamp(104px,9vw,140px)]">
+    <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:pl-0 md:pr-[clamp(24px,4vw,72px)]">
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(190px,340px)] md:gap-[clamp(24px,3vw,56px)]">
         <div>
           <div className="inline-flex items-center gap-[10px] font-mono text-[10.5px] tracking-[0.26em] text-[#0d7a5c]">

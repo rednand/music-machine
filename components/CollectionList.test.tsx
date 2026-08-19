@@ -32,20 +32,6 @@ describe("CollectionList", () => {
     expect(screen.queryByText(/estrela pop/)).not.toBeInTheDocument();
   });
 
-  it("renders a sequential ghost number for each entry, starting at 01", () => {
-    render(
-      <CollectionList
-        entries={[
-          { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
-          { albumId: "album-2", title: "Nevermind", artistName: "Nirvana", releaseYear: "1991", hook: null }
-        ]}
-      />
-    );
-
-    expect(screen.getByText("01")).toBeInTheDocument();
-    expect(screen.getByText("02")).toBeInTheDocument();
-  });
-
   it("renders nothing when there are no entries", () => {
     const { container } = render(<CollectionList entries={[]} />);
 

@@ -23,11 +23,11 @@ export function CollectionList({
   return (
     <>
       <ul className="flex flex-col gap-[18px]">
-        {visibleEntries.map((entry, index) => (
+        {visibleEntries.map((entry) => (
           <li key={entry.albumId}>
             <Link
               href={`/albums/${entry.albumId}`}
-              className="relative flex items-center gap-[30px] overflow-hidden rounded-xl border border-white/90 bg-white/50 p-[20px] pr-9 backdrop-blur-[20px] transition-colors hover:border-[#d1145a]/40 hover:bg-white/70"
+              className="flex items-center gap-[30px] rounded-xl border border-white/90 bg-white/50 p-[20px] pr-9 backdrop-blur-[20px] transition-colors hover:border-[#d1145a]/40 hover:bg-white/70"
               style={{ boxShadow: "0 34px 60px -44px rgba(23,20,32,0.55)" }}
             >
               <div
@@ -45,12 +45,6 @@ export function CollectionList({
                 </div>
                 <h3 className="mb-[10px] mt-2 font-serif text-[34px] font-bold tracking-[-0.02em] text-[#120f18]">{entry.title}</h3>
                 {entry.hook && <p className="text-base font-light text-[#443f4f]">{entry.hook}</p>}
-              </div>
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute right-[30px] top-[-14px] font-serif text-[104px] font-bold leading-none text-[#171420]/[0.06]"
-              >
-                {String(index + 1).padStart(2, "0")}
               </div>
             </Link>
           </li>

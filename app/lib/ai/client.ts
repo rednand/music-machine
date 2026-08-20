@@ -48,7 +48,8 @@ export class GroqClient implements ChatCompletionClient {
   async complete(prompt: string): Promise<string> {
     try {
       return await this.completeWithModel(this.config.primaryModel, prompt);
-    } catch {
+    } catch (error) {
+      console.error(`Groq primary model ${this.config.primaryModel} failed, falling back to ${this.config.fallbackModel}`, error);
       return await this.completeWithModel(this.config.fallbackModel, prompt);
     }
   }

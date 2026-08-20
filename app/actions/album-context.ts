@@ -56,10 +56,7 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
     fallbackModel: "openai/gpt-oss-20b"
   });
 
-  const catalog = new CatalogProvider({
-    clientId: process.env.CATALOG_PROVIDER_CLIENT_ID ?? "",
-    clientSecret: process.env.CATALOG_PROVIDER_CLIENT_SECRET ?? ""
-  });
+  const catalog = new CatalogProvider();
   const discography = new DiscographyProvider({ token: process.env.DISCOGRAPHY_PROVIDER_TOKEN ?? "" });
   const popularity = new PopularityProvider({ apiKey: process.env.POPULARITY_PROVIDER_API_KEY ?? "" });
   const encyclopedia = new EncyclopediaProvider({

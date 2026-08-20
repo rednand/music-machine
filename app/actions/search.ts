@@ -57,10 +57,7 @@ function candidateToResult(query: string, candidate: RawAlbumData): CandidateSea
 }
 
 function createCatalogProvider(): CatalogProvider {
-  return new CatalogProvider({
-    clientId: process.env.CATALOG_PROVIDER_CLIENT_ID ?? "",
-    clientSecret: process.env.CATALOG_PROVIDER_CLIENT_SECRET ?? ""
-  });
+  return new CatalogProvider();
 }
 
 async function searchExternalCandidates(query: string): Promise<CandidateSearchResult[]> {

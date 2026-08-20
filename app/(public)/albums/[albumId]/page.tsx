@@ -6,12 +6,17 @@ import { AlbumInfoCards } from "@/components/AlbumInfoCards";
 import { TrackList } from "@/components/TrackList";
 import { CreditsList } from "@/components/CreditsList";
 import { NarrativeSection } from "@/components/NarrativeSection";
+import { CategoryCardGrid } from "@/components/CategoryCardGrid";
+import { MusicalSceneGrid } from "@/components/MusicalSceneGrid";
+import { ReceptionSplit } from "@/components/ReceptionSplit";
 import { SectionCard } from "@/components/SectionCard";
 import { PerformancePanel } from "@/components/PerformancePanel";
 import { CuriositiesList } from "@/components/CuriositiesList";
 import { InfluenceList } from "@/components/InfluenceList";
 import { RecommendationsList } from "@/components/RecommendationsList";
 import { OtherAlbumsByArtist } from "@/components/OtherAlbumsByArtist";
+
+const WORLD_CONTEXT_LABELS = ["Política", "Cultura", "Tecnologia"];
 
 export default async function AlbumPage({
   params,
@@ -51,7 +56,7 @@ export default async function AlbumPage({
       </div>
 
       <div className="mt-10">
-        <SectionCard id="album" title="O álbum">
+        <SectionCard id="album" number="01" title="O álbum">
           <AlbumInfoCards releaseDate={body.header.releaseDate} label={body.header.label} credits={body.credits} />
           <div className="mt-6">
             <TrackList tracks={body.tracks} highlightedTrackId={track} />
@@ -60,34 +65,39 @@ export default async function AlbumPage({
         </SectionCard>
 
         <div id="artista">
-          <NarrativeSection title="O momento do artista" statements={body.artistMoment} />
+          <NarrativeSection number="02" title="O momento do artista" statements={body.artistMoment} />
         </div>
 
         <div id="mundo">
-          <NarrativeSection title={`O mundo em ${year}`} statements={body.worldContext} />
+          <CategoryCardGrid
+            number="03"
+            title={`O mundo em ${year}`}
+            statements={body.worldContext}
+            labels={WORLD_CONTEXT_LABELS}
+          />
         </div>
 
         <div id="cenario">
-          <NarrativeSection title="O cenário musical" statements={body.musicalScene} />
+          <MusicalSceneGrid number="04" title="O cenário musical" albums={body.sameEraAlbums} />
         </div>
 
-        <SectionCard id="desempenho" title="Desempenho">
+        <SectionCard id="desempenho" number="05" title="Desempenho">
           <PerformancePanel records={body.performance} />
         </SectionCard>
 
         <div id="legado">
-          <NarrativeSection title="Recepção então x legado hoje" statements={body.receptionVsLegacy} />
+          <ReceptionSplit number="06" title="Recepção então x legado hoje" statements={body.receptionVsLegacy} />
         </div>
 
-        <SectionCard id="influencia" title="Influência">
+        <SectionCard id="influencia" number="07" title="Influência">
           <InfluenceList influences={body.influence} />
         </SectionCard>
 
-        <SectionCard id="curiosidades" title="Curiosidades">
+        <SectionCard id="curiosidades" number="08" title="Curiosidades">
           <CuriositiesList curiosities={body.curiosities} />
         </SectionCard>
 
-        <SectionCard id="linha-do-tempo" title={`Linha do tempo de ${body.header.artist}`}>
+        <SectionCard id="linha-do-tempo" number="09" title={`Linha do tempo de ${body.header.artist}`}>
           <OtherAlbumsByArtist albums={body.otherAlbumsByArtist} />
         </SectionCard>
 

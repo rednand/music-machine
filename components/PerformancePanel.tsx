@@ -22,7 +22,13 @@ export function PerformancePanel({ records }: PerformancePanelProps) {
           style={{ boxShadow: "0 24px 44px -36px rgba(23,20,32,0.35)" }}
         >
           <div className="font-mono text-[9.5px] tracking-[0.22em] text-[#a8a2b0]">{record.label}</div>
-          <div className="mt-2 font-serif text-2xl font-bold text-[#120f18]">{record.value}</div>
+          <div
+            className={`mt-2 font-serif text-2xl font-bold ${
+              record.kind === "certification" ? "text-[#d1145a]" : "text-[#120f18]"
+            }`}
+          >
+            {record.value}
+          </div>
         </div>
       ))}
     </div>

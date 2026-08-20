@@ -31,7 +31,7 @@ export function Header({ header }: { header: AlbumContextHeader }) {
           {header.title}
         </h1>
         {header.hook && (
-          <div className="font-serif text-xl font-medium italic text-[#d1145a]">{header.hook}</div>
+          <div className="line-clamp-2 font-serif text-xl font-medium italic text-[#d1145a]">{header.hook}</div>
         )}
       </div>
     </div>

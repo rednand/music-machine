@@ -1,6 +1,12 @@
 import type { SupabaseLike } from "./supabase-like";
 import type { NarrativeFacet, NarrativeStatement } from "../ai/narrative";
 
+const UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === UNIQUE_VIOLATION;
+}
+
 export type NarrativeArticleStatus = "pending" | "published" | "failed_validation" | "stale";
 
 export interface NarrativeArticleRow {
@@ -19,12 +25,26 @@ export interface NarrativeStatementInput extends NarrativeStatement {
 export function createNarrativeArticleRepository(supabase: SupabaseLike) {
   return {
     async createPending(albumId: string, facet: NarrativeFacet): Promise<NarrativeArticleRow> {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from<NarrativeArticleRow>("narrative_articles")
         .insert({ album_id: albumId, facet, status: "pending", language: "pt-BR" })
         .select()
         .single();
-      return data as NarrativeArticleRow;
+      if (data) {
+        return data;
+      }
+      if (isUniqueViolation(error)) {
+        const existing = await supabase
+          .from<NarrativeArticleRow>("narrative_articles")
+          .select("*")
+          .eq("album_id", albumId)
+          .eq("facet", facet)
+          .maybeSingle();
+        if (existing.data) {
+          return existing.data;
+        }
+      }
+      throw new Error(`Failed to create narrative article: ${error ? JSON.stringify(error) : "no row returned"}`);
     },
 
     async publish(id: string, statements: NarrativeStatementInput[]): Promise<NarrativeArticleRow> {

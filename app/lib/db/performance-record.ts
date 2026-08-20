@@ -13,8 +13,11 @@ export interface PerformanceRecordRow {
 export function createPerformanceRecordRepository(supabase: SupabaseLike) {
   return {
     async create(input: Omit<PerformanceRecordRow, "id">): Promise<PerformanceRecordRow> {
-      const { data } = await supabase.from<PerformanceRecordRow>("performance_records").insert(input).select().single();
-      return data as PerformanceRecordRow;
+      const { data, error } = await supabase.from<PerformanceRecordRow>("performance_records").insert(input).select().single();
+      if (!data) {
+        throw new Error(`Failed to create performance record: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
     },
 
     async findByAlbumId(albumId: string): Promise<PerformanceRecordRow[]> {

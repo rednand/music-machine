@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Disco girando como relógio">
+  <defs>
+    <radialGradient id="disc" cx="50%" cy="50%" r="50%">
+      <stop offset="12%" stop-color="#f7f4f1"></stop>
+      <stop offset="13.5%" stop-color="#241f2e"></stop>
+      <stop offset="100%" stop-color="#2c2637"></stop>
+    </radialGradient>
+    <style>
+      .spin { transform-origin: 100px 100px; animation: spin linear infinite; }
+      .disco { animation-duration: 6s; }
+      .min { animation-duration: 3s; }
+      .hora { animation-duration: 12s; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </defs>
+
+  <g class="spin disco">
+    <circle cx="100" cy="100" r="100" fill="url(#disc)"></circle>
+    <circle cx="100" cy="100" r="82" fill="none" stroke="#ffffff" stroke-opacity="0.14"></circle>
+    <circle cx="100" cy="100" r="62" fill="none" stroke="#ffffff" stroke-opacity="0.12"></circle>
+    <circle cx="100" cy="100" r="42" fill="none" stroke="#ffffff" stroke-opacity="0.1"></circle>
+  </g>
+
+  <circle cx="100" cy="100" r="28" fill="#d1145a"></circle>
+
+  <g class="spin min">
+    <rect x="98.5" y="100" width="3" height="64" rx="1.5" fill="#f7f4f1"></rect>
+  </g>
+
+  <g class="spin hora">
+    <rect x="98.75" y="100" width="2.5" height="88" rx="1.25" fill="#cfc9c2"></rect>
+  </g>
+
+  <circle cx="100" cy="100" r="5" fill="#f7f4f1"></circle>
+</svg>

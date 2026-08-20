@@ -4,9 +4,11 @@ import { SectionCard } from "@/components/SectionCard";
 const UNCERTAIN_KINDS: NarrativeStatement["kind"][] = ["interpretation", "critical_opinion", "unconfirmed"];
 
 export function NarrativeSection({
+  number,
   title,
   statements
 }: {
+  number?: string;
   title: string;
   statements: NarrativeStatement[];
 }) {
@@ -24,7 +26,7 @@ export function NarrativeSection({
   }
 
   return (
-    <SectionCard title={title}>
+    <SectionCard number={number} title={title}>
       <p className="font-sans text-[17px] font-light leading-relaxed text-[#443f4f]">
         {statements.map((statement, index) => (
           <span key={index}>

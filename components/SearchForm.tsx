@@ -11,6 +11,7 @@ import {
   type SearchResultItem
 } from "@/app/actions/search";
 import { searchSongs, type SongSearchResult } from "@/app/actions/song-search";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { cn } from "@/lib/utils";
 
 type SearchMode = "album" | "song";
@@ -26,20 +27,27 @@ export function SearchForm() {
   const [results, setResults] = useState<SearchResultItem[] | null>(null);
   const [songResults, setSongResults] = useState<SongSearchResult[] | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    setIsSearching(true);
 
-    if (mode === "song") {
-      setResults(null);
-      setSongResults(await searchSongs(query));
-      return;
+    try {
+      if (mode === "song") {
+        setResults(null);
+        setSongResults(await searchSongs(query));
+        return;
+      }
+
+      setSongResults(null);
+      setResults(await searchCatalog(query));
+    } finally {
+      setIsSearching(false);
     }
-
-    setSongResults(null);
-    setResults(await searchCatalog(query));
   }
 
   async function handleCandidateSelect(candidate: CandidateSearchResult) {
@@ -53,6 +61,7 @@ export function SearchForm() {
       return;
     }
 
+    setIsNavigating(true);
     router.push(`/albums/${outcome.albumId}`);
   }
 
@@ -83,13 +92,17 @@ export function SearchForm() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={mode === "song" ? "digite o nome de uma música..." : "digite um artista, álbum ou ano..."}
-            className="w-full border-0 bg-transparent text-base text-[#171420] outline-none placeholder:text-[#a8a2b0]"
+            disabled={isSearching || isNavigating}
+            className="w-full border-0 bg-transparent text-base text-[#171420] outline-none placeholder:text-[#a8a2b0] disabled:opacity-60"
           />
-          <button type="submit" className="sr-only">
+          <button type="submit" disabled={isSearching || isNavigating} className="sr-only">
             Buscar
           </button>
         </div>
       </form>
+
+      {isSearching && <LoadingIndicator label="Buscando..." className="mt-4" />}
+      {isNavigating && <LoadingIndicator label="Abrindo álbum..." className="mt-4" />}
 
       {error && <p className="mt-4 text-[#d1145a]">{error}</p>}
 

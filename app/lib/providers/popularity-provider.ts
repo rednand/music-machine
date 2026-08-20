@@ -29,13 +29,20 @@ export class PopularityProvider implements PopularityProviderAdapter {
     });
     const url = `https://ws.audioscrobbler.com/2.0/?${params.toString()}`;
 
-    const response = await this.fetchImpl(url);
-    const data = (await response.json()) as AlbumInfoResponse;
+    try {
+      const response = await this.fetchImpl(url);
+      if (!response.ok) {
+        return [];
+      }
+      const data = (await response.json()) as AlbumInfoResponse;
 
-    if (!data.album) {
+      if (!data.album) {
+        return [];
+      }
+
+      return data.album.tags?.tag?.map((t) => t.name) ?? [];
+    } catch {
       return [];
     }
-
-    return data.album.tags?.tag.map((t) => t.name) ?? [];
   }
 }

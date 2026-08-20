@@ -40,7 +40,7 @@ describe("DiscoverPage", () => {
     expect(screen.getAllByRole("link", { name: /true blue/i })[0]).toHaveAttribute("href", "/albums/album-1");
   });
 
-  it("renders the two-line hero title with an accent second line and an italic tagline", async () => {
+  it("renders the hero title and the disco-clock logo above it", async () => {
     vi.spyOn(discoveryAction, "getDiscoveryPage").mockResolvedValue({
       state: "ready",
       featured: { albumId: "album-1", title: "True Blue", artistName: "Madonna", releaseYear: "1986", hook: null },
@@ -48,12 +48,11 @@ describe("DiscoverPage", () => {
     });
 
     const element = await DiscoverPage();
-    render(element);
+    const { container } = render(element);
 
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent(/VIAJE\s*NO TEMPO/i);
-    expect(screen.getByText("NO TEMPO").tagName).toBe("SPAN");
-    expect(screen.getByText(/através da música/i)).toBeInTheDocument();
+    expect(heading).toHaveTextContent(/Disco em contexto/i);
+    expect(container.querySelector('img[src="/logo-disco-relogio.svg"]')).toBeInTheDocument();
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
   });
 

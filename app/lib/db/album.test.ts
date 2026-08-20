@@ -69,6 +69,78 @@ describe("AlbumRepository", () => {
     expect(credits).toEqual([expect.objectContaining({ person_name: "Jimmy Jam", role: "Producer" })]);
   });
 
+  it("returns the already-persisted track instead of throwing when a concurrent insert already created it", async () => {
+    const existingTrack = { id: "track-1", album_id: "album-1", title: "Jam", track_number: 1, duration_seconds: 340 };
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "23505", message: "duplicate key value" } })
+          })
+        }),
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: existingTrack, error: null })
+            })
+          })
+        })
+      })
+    };
+    const repo = createAlbumRepository(supabase as never);
+
+    const result = await repo.createTrack({ album_id: "album-1", title: "Jam", track_number: 1, duration_seconds: 340 });
+
+    expect(result).toEqual(existingTrack);
+  });
+
+  it("returns the already-persisted credit instead of throwing when a concurrent insert already created it", async () => {
+    const existingCredit = { id: "credit-1", album_id: "album-1", person_name: "Jimmy Jam", role: "Producer", source_id: "source-1" };
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "23505", message: "duplicate key value" } })
+          })
+        }),
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: existingCredit, error: null })
+              })
+            })
+          })
+        })
+      })
+    };
+    const repo = createAlbumRepository(supabase as never);
+
+    const result = await repo.createCredit({
+      album_id: "album-1",
+      person_name: "Jimmy Jam",
+      role: "Producer",
+      source_id: "source-2"
+    });
+
+    expect(result).toEqual(existingCredit);
+  });
+
+  it("still throws for a genuine failure that isn't a unique-constraint conflict", async () => {
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "500", message: "connection reset" } })
+          })
+        })
+      })
+    };
+    const repo = createAlbumRepository(supabase as never);
+
+    await expect(repo.createTrack({ album_id: "album-1", title: "Jam", track_number: 1 })).rejects.toThrow();
+  });
+
   it("lists all albums", async () => {
     const supabase = createFakeSupabase({});
     const repo = createAlbumRepository(supabase as never);

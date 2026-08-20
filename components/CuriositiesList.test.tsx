@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CuriositiesList } from "./CuriositiesList";
 
 describe("CuriositiesList", () => {
-  it("renders a distinct label for confirmed, unconfirmed, and disputed items", () => {
+  it("renders each curiosity's summary text", () => {
     render(
       <CuriositiesList
         curiosities={[
@@ -14,9 +14,9 @@ describe("CuriositiesList", () => {
       />
     );
 
-    expect(screen.getByText(/^confirmado$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^não confirmado$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^contestado$/i)).toBeInTheDocument();
+    expect(screen.getByText("Fato confirmado.")).toBeInTheDocument();
+    expect(screen.getByText("Rumor não confirmado.")).toBeInTheDocument();
+    expect(screen.getByText("Versão contestada.")).toBeInTheDocument();
   });
 
   it("shows a placeholder message when there are no curiosities", () => {

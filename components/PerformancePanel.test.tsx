@@ -30,4 +30,18 @@ describe("PerformancePanel", () => {
     expect(screen.getByText(/united states/i)).toBeInTheDocument();
     expect(screen.getByText("Platinum")).toBeInTheDocument();
   });
+
+  it("highlights certification records in the accent color, unlike other kinds", () => {
+    render(
+      <PerformancePanel
+        records={[
+          { id: "p1", album_id: "a1", kind: "chart_position", label: "Billboard 200", value: "1", source_id: "s1" },
+          { id: "p2", album_id: "a1", kind: "certification", label: "United States", value: "Platinum", source_id: "s1" }
+        ]}
+      />
+    );
+
+    expect(screen.getByText("1")).toHaveClass("text-[#120f18]");
+    expect(screen.getByText("Platinum")).toHaveClass("text-[#d1145a]");
+  });
 });

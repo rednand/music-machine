@@ -44,7 +44,7 @@ export function CollectionList({
                   {entry.releaseYear} · {entry.artistName.toUpperCase()}
                 </div>
                 <h3 className="mb-[10px] mt-2 font-serif text-[34px] font-bold tracking-[-0.02em] text-[#120f18]">{entry.title}</h3>
-                {entry.hook && <p className="text-base font-light text-[#443f4f]">{entry.hook}</p>}
+                {entry.hook && <p className="line-clamp-2 text-base font-light text-[#443f4f]">{entry.hook}</p>}
               </div>
             </Link>
           </li>

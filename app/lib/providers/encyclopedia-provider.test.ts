@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { EncyclopediaProvider } from "./encyclopedia-provider";
+import { EncyclopediaProvider, parseInfoboxNameList } from "./encyclopedia-provider";
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -101,5 +101,93 @@ describe("EncyclopediaProvider", () => {
     const provider = new EncyclopediaProvider(config, fetchImpl as unknown as typeof fetch);
 
     expect(await provider.fetchContextFacts({ artistName: "Janet Jackson", albumTitle: "Control" })).toEqual([]);
+  });
+
+  it("fetches the artist's summary and confirmed influence names from their infobox", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          extract: "Madonna is an American singer known as the Queen of Pop.",
+          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/Madonna" } }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          query: {
+            pages: {
+              "456": {
+                revisions: [
+                  {
+                    slots: {
+                      main: {
+                        "*":
+                          "{{Infobox musical artist\n" +
+                          "| name = Madonna\n" +
+                          "| influences = {{startplainlist}}\n* [[David Bowie]]\n* [[Nile Rodgers]]\n{{endplainlist}}\n" +
+                          "| influenced = {{startplainlist}}\n* [[Britney Spears]]\n* [[Lady Gaga (musician)|Lady Gaga]]\n{{endplainlist}}\n" +
+                          "| genre = Pop\n" +
+                          "}}"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        })
+      );
+
+    const provider = new EncyclopediaProvider(config, fetchImpl as unknown as typeof fetch);
+
+    const profile = await provider.fetchArtistProfile("Madonna");
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.stringContaining("en.wikipedia.org/api/rest_v1/page/summary/Madonna"), expect.anything());
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, expect.stringContaining("en.wikipedia.org/w/api.php"), expect.anything());
+    expect(profile.summary).toEqual(
+      expect.objectContaining({ text: "Madonna is an American singer known as the Queen of Pop." })
+    );
+    expect(profile.influencedBy).toEqual(["David Bowie", "Nile Rodgers"]);
+    expect(profile.influenced).toEqual(["Britney Spears", "Lady Gaga"]);
+  });
+
+  it("returns empty influence lists and a null summary when the artist page can't be found", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("Not found", { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ query: { pages: { "-1": {} } } }));
+
+    const provider = new EncyclopediaProvider(config, fetchImpl as unknown as typeof fetch);
+
+    const profile = await provider.fetchArtistProfile("Some Obscure Act");
+
+    expect(profile).toEqual({ summary: null, influencedBy: [], influenced: [] });
+  });
+});
+
+describe("parseInfoboxNameList", () => {
+  it("extracts wikilink targets from a plainlist-wrapped infobox field", () => {
+    const wikitext =
+      "| influences = {{startplainlist}}\n* [[David Bowie]]\n* [[Prince (musician)|Prince]]\n{{endplainlist}}\n| genre = Pop";
+
+    expect(parseInfoboxNameList(wikitext, "influences")).toEqual(["David Bowie", "Prince"]);
+  });
+
+  it("falls back to comma-splitting plain text when there are no wikilinks", () => {
+    const wikitext = "| influenced = Britney Spears, Lady Gaga\n| genre = Pop";
+
+    expect(parseInfoboxNameList(wikitext, "influenced")).toEqual(["Britney Spears", "Lady Gaga"]);
+  });
+
+  it("returns an empty array when the field is absent", () => {
+    const wikitext = "| genre = Pop\n| years_active = 1979-present";
+
+    expect(parseInfoboxNameList(wikitext, "influences")).toEqual([]);
+  });
+
+  it("handles the field being the last one before the infobox closes", () => {
+    const wikitext = "| influences = [[David Bowie]]\n}}";
+
+    expect(parseInfoboxNameList(wikitext, "influences")).toEqual(["David Bowie"]);
   });
 });

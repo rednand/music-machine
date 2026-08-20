@@ -3,14 +3,16 @@ import { describe, expect, it } from "vitest";
 import { RecommendationsList } from "./RecommendationsList";
 
 describe("RecommendationsList", () => {
-  it("renders each recommendation with its narrative reason, not a bare name", () => {
+  it("renders each recommendation as a card with its title, artist, year, and reason", () => {
     render(
       <RecommendationsList
         recommendations={[
           {
             id: "r1",
-            subject_album_id: "control",
-            recommended_album_id: "true-blue",
+            albumId: "true-blue",
+            title: "True Blue",
+            artistName: "Madonna",
+            releaseYear: "1986",
             reason: "same_era",
             explanation: "Lançado por volta da mesma época de Control."
           }
@@ -18,7 +20,10 @@ describe("RecommendationsList", () => {
       />
     );
 
-    expect(screen.getByText("Lançado por volta da mesma época de Control.")).toBeInTheDocument();
+    expect(screen.getByText("True Blue")).toBeInTheDocument();
+    expect(screen.getByText("Madonna")).toBeInTheDocument();
+    expect(screen.getByText(/1986/)).toBeInTheDocument();
+    expect(screen.getByText(/mesma época/i)).toBeInTheDocument();
     expect(screen.getByRole("link")).toHaveAttribute("href", "/albums/true-blue");
   });
 

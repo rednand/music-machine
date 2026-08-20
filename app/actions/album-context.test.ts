@@ -25,10 +25,11 @@ describe("getAlbumContext", () => {
         artistMoment: [],
         worldContext: [],
         musicalScene: [],
+        sameEraAlbums: [],
         performance: null,
         receptionVsLegacy: [],
         curiosities: [],
-        influence: [{ id: "i1", to_album_id: "album-2", explanation: "x", source_id: "s1" }],
+        influence: [{ id: "i1", artistName: "Missy Elliott", albumId: "album-2", explanation: "x" }],
         recommendations: []
       }
     });

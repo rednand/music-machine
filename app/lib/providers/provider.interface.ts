@@ -28,6 +28,14 @@ export interface RawCreditData {
   source: ProviderSourceRef;
 }
 
+
+export interface RawTrackData {
+  title: string;
+  position: string;
+  durationSeconds?: number;
+  source: ProviderSourceRef;
+}
+
 export interface RawPerformanceRecordData {
   kind: "chart_position" | "certification" | "sales_figure" | "award";
   label: string;
@@ -42,15 +50,25 @@ export interface RawContextFactData {
   source: ProviderSourceRef;
 }
 
+export interface ArtistProfileData {
+  summary: RawContextFactData | null;
+  influencedBy: string[];
+  influenced: string[];
+}
+
 export interface CatalogProviderAdapter {
   readonly providerName: string;
   searchAlbum(query: AlbumLookupQuery): Promise<RawAlbumData[]>;
   searchByText(query: string): Promise<RawAlbumData[]>;
+  fetchTracks(albumId: string): Promise<RawTrackData[]>;
+  searchArtist(artistName: string): Promise<string | null>;
+  fetchArtistAlbums(artistId: string): Promise<RawAlbumData[] | null>;
 }
 
 export interface CreditsProviderAdapter {
   readonly providerName: string;
   fetchCredits(query: AlbumLookupQuery): Promise<RawCreditData[]>;
+  fetchTracks(query: AlbumLookupQuery): Promise<RawTrackData[]>;
 }
 
 export interface PopularityProviderAdapter {
@@ -62,4 +80,15 @@ export interface EncyclopediaProviderAdapter {
   readonly providerName: string;
   fetchContextFacts(query: AlbumLookupQuery): Promise<RawContextFactData[]>;
   fetchPerformanceRecords(query: AlbumLookupQuery): Promise<RawPerformanceRecordData[]>;
+  fetchArtistProfile(artistName: string): Promise<ArtistProfileData>;
+}
+
+export interface RawHistoricalEventData {
+  title: string;
+  date: string;
+}
+
+export interface HistoricalEventsProviderAdapter {
+  readonly providerName: string;
+  fetchEvents(releaseDate: string): Promise<RawHistoricalEventData[]>;
 }

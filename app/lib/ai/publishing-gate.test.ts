@@ -41,4 +41,20 @@ describe("validateStatements", () => {
     expect(result.valid).toBe(false);
     expect(result.failures).toEqual(expect.arrayContaining([expect.stringContaining("copied")]));
   });
+
+  it("fails when a statement is a refusal instead of real content", () => {
+    const result = validateStatements(
+      [
+        {
+          text: "Não há fontes disponíveis para confirmar eventos políticos ou históricos marcantes próximos ao lançamento.",
+          kind: "interpretation",
+          sourceIds: []
+        }
+      ],
+      sourceTexts
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.failures).toEqual(expect.arrayContaining([expect.stringContaining("refused")]));
+  });
 });

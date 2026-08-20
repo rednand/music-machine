@@ -1,5 +1,11 @@
 import type { SupabaseLike } from "./supabase-like";
 
+const UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === UNIQUE_VIOLATION;
+}
+
 export interface AlbumRow {
   id: string;
   artist_id: string;
@@ -47,6 +53,7 @@ export interface ArtistRow {
   id: string;
   name: string;
   slug: string;
+  spotify_artist_id?: string;
 }
 
 export interface CreateArtistInput {
@@ -57,8 +64,11 @@ export interface CreateArtistInput {
 export function createAlbumRepository(supabase: SupabaseLike) {
   return {
     async createAlbum(input: CreateAlbumInput): Promise<AlbumRow> {
-      const { data } = await supabase.from<AlbumRow>("albums").insert(input).select().single();
-      return data as AlbumRow;
+      const { data, error } = await supabase.from<AlbumRow>("albums").insert(input).select().single();
+      if (!data) {
+        throw new Error(`Failed to create album: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
     },
 
     async findAlbumById(id: string): Promise<AlbumRow | null> {
@@ -72,13 +82,42 @@ export function createAlbumRepository(supabase: SupabaseLike) {
     },
 
     async createTrack(input: Omit<TrackRow, "id">): Promise<TrackRow> {
-      const { data } = await supabase.from<TrackRow>("tracks").insert(input).select().single();
-      return data as TrackRow;
+      const { data, error } = await supabase.from<TrackRow>("tracks").insert(input).select().single();
+      if (data) {
+        return data;
+      }
+      if (isUniqueViolation(error) && input.track_number !== undefined) {
+        const existing = await supabase
+          .from<TrackRow>("tracks")
+          .select("*")
+          .eq("album_id", input.album_id)
+          .eq("track_number", input.track_number)
+          .maybeSingle();
+        if (existing.data) {
+          return existing.data;
+        }
+      }
+      throw new Error(`Failed to create track: ${error ? JSON.stringify(error) : "no row returned"}`);
     },
 
     async createCredit(input: Omit<CreditRow, "id">): Promise<CreditRow> {
-      const { data } = await supabase.from<CreditRow>("credits").insert(input).select().single();
-      return data as CreditRow;
+      const { data, error } = await supabase.from<CreditRow>("credits").insert(input).select().single();
+      if (data) {
+        return data;
+      }
+      if (isUniqueViolation(error) && input.album_id) {
+        const existing = await supabase
+          .from<CreditRow>("credits")
+          .select("*")
+          .eq("album_id", input.album_id)
+          .eq("person_name", input.person_name)
+          .eq("role", input.role)
+          .maybeSingle();
+        if (existing.data) {
+          return existing.data;
+        }
+      }
+      throw new Error(`Failed to create credit: ${error ? JSON.stringify(error) : "no row returned"}`);
     },
 
     async findCreditsByAlbumId(albumId: string): Promise<CreditRow[]> {
@@ -102,8 +141,15 @@ export function createAlbumRepository(supabase: SupabaseLike) {
     },
 
     async createArtist(input: CreateArtistInput): Promise<ArtistRow> {
-      const { data } = await supabase.from<ArtistRow>("artists").insert(input).select().single();
-      return data as ArtistRow;
+      const { data, error } = await supabase.from<ArtistRow>("artists").insert(input).select().single();
+      if (!data) {
+        throw new Error(`Failed to create artist: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
+    },
+
+    async setArtistSpotifyId(artistId: string, spotifyArtistId: string): Promise<void> {
+      await supabase.from<ArtistRow>("artists").update({ spotify_artist_id: spotifyArtistId }).eq("id", artistId);
     },
 
     async findAlbumBySlug(slug: string): Promise<AlbumRow | null> {

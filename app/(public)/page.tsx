@@ -14,18 +14,10 @@ export default async function DiscoverPage() {
     <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:pl-0 md:pr-[clamp(24px,4vw,72px)]">
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(190px,340px)] md:gap-[clamp(24px,3vw,56px)]">
         <div>
-          <div className="inline-flex items-center gap-[10px] font-mono text-[10.5px] tracking-[0.26em] text-[#0d7a5c]">
-            <span className="h-[5px] w-[5px] rounded-full bg-[#0d7a5c]" />
-            MÁQUINA DO TEMPO · CONTEXTO DE ÁLBUNS
-          </div>
-          <h1 className="mt-[30px] max-w-full font-heading text-[clamp(40px,6.2vw,120px)] font-extrabold leading-[0.84] tracking-[-0.05em] text-[#120f18]">
-            <span className="block w-fit max-w-full">
-              <span className="block">VIAJE</span>
-              <span className="ml-[0.36em] block whitespace-nowrap text-[#d1145a]">NO TEMPO</span>
-              <span className="mt-[0.5em] block text-right text-[0.24em] font-normal italic leading-[1.2] tracking-[-0.01em] text-[#443f4f]">
-                através da música
-              </span>
-            </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-disco-relogio.svg" alt="" aria-hidden="true" className="mb-[26px] h-[104px] w-[104px]" />
+          <h1 className="font-heading text-[clamp(30px,3.4vw,50px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#d1145a]">
+            Disco em contexto
           </h1>
           <p className="mt-10 max-w-[520px] text-[19px] font-light leading-[1.6] text-[#443f4f]">
             O que acontecia na vida do artista, no mundo e nas paradas quando o disco caiu — e como ele

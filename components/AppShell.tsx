@@ -23,17 +23,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }}
       />
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center justify-between border-r border-[#171420]/[0.08] bg-white/50 py-5 pb-6 backdrop-blur-xl md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center justify-between overflow-hidden border-r border-[#171420]/[0.08] bg-white/50 py-5 pb-6 backdrop-blur-xl md:flex">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between gap-6 py-16 font-mono text-[9.5px] tracking-[0.3em] text-[#171420]/[0.06]"
+        >
+          {Array.from({ length: 10 }).map((_, index) => (
+            <span key={index} className="[writing-mode:vertical-rl]">
+              ACERVO
+            </span>
+          ))}
+        </div>
+
         <Link
           href="/"
           aria-label="Acervo"
-          className="flex h-[38px] w-[38px] items-center justify-center rounded-full shadow-[0_8px_20px_-8px_rgba(209,20,90,0.6)]"
+          className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full shadow-[0_8px_20px_-8px_rgba(209,20,90,0.6)]"
           style={{ background: "linear-gradient(150deg, #ff7fae, #d1145a)" }}
         >
           <span className="h-3 w-3 rounded-full border-2 border-white/95" />
         </Link>
 
-        <nav className="flex flex-col items-center gap-8 font-mono text-[9.5px] tracking-[0.26em]">
+        <nav className="relative flex flex-col items-center gap-8 font-mono text-[9.5px] tracking-[0.26em]">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
@@ -41,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "[writing-mode:vertical-rl] transition-colors hover:text-[#d1145a]",
+                  "[writing-mode:vertical-rl] bg-white/50 backdrop-blur-xl transition-colors hover:text-[#d1145a]",
                   active ? "text-[#d1145a]" : "text-[#6b6577]"
                 )}
               >
@@ -51,7 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="font-mono text-[9.5px] tracking-[0.26em] text-[#a8a2b0] [writing-mode:vertical-rl]">
+        <div className="relative bg-white/50 font-mono text-[9.5px] tracking-[0.26em] text-[#a8a2b0] backdrop-blur-xl [writing-mode:vertical-rl]">
           1980 — HOJE
         </div>
       </aside>

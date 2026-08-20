@@ -25,4 +25,25 @@ describe("PopularityProvider", () => {
 
     expect(await provider.fetchTags({ artistName: "Nobody", albumTitle: "Nothing" })).toEqual([]);
   });
+
+  it("returns an empty array when the album has tags without a tag list", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ album: { tags: {} } }));
+    const provider = new PopularityProvider({ apiKey: "lastfm-key" }, fetchImpl as unknown as typeof fetch);
+
+    expect(await provider.fetchTags({ artistName: "Garbage", albumTitle: "Version 2.0" })).toEqual([]);
+  });
+
+  it("returns an empty array when the request fails", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const provider = new PopularityProvider({ apiKey: "lastfm-key" }, fetchImpl as unknown as typeof fetch);
+
+    expect(await provider.fetchTags({ artistName: "Nobody", albumTitle: "Nothing" })).toEqual([]);
+  });
+
+  it("returns an empty array when the fetch throws", async () => {
+    const fetchImpl = vi.fn().mockRejectedValueOnce(new Error("network error"));
+    const provider = new PopularityProvider({ apiKey: "lastfm-key" }, fetchImpl as unknown as typeof fetch);
+
+    expect(await provider.fetchTags({ artistName: "Nobody", albumTitle: "Nothing" })).toEqual([]);
+  });
 });

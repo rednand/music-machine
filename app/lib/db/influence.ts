@@ -13,8 +13,11 @@ export interface InfluenceRow {
 export function createInfluenceRepository(supabase: SupabaseLike) {
   return {
     async create(input: Omit<InfluenceRow, "id">): Promise<InfluenceRow> {
-      const { data } = await supabase.from<InfluenceRow>("influences").insert(input).select().single();
-      return data as InfluenceRow;
+      const { data, error } = await supabase.from<InfluenceRow>("influences").insert(input).select().single();
+      if (!data) {
+        throw new Error(`Failed to create influence: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
     },
 
     async findByFromAlbumId(albumId: string): Promise<InfluenceRow[]> {

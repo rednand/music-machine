@@ -45,8 +45,11 @@ export function createSourceRepository(supabase: SupabaseLike) {
   return {
     async create(input: CreateSourceInput): Promise<SourceRow> {
       assertAttributionPresent(input);
-      const { data } = await supabase.from<SourceRow>("sources").insert(input).select().single();
-      return data as SourceRow;
+      const { data, error } = await supabase.from<SourceRow>("sources").insert(input).select().single();
+      if (!data) {
+        throw new Error(`Failed to create source: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
     },
 
     async findById(id: string): Promise<SourceRow | null> {

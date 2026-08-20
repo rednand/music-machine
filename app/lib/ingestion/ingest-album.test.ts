@@ -36,7 +36,12 @@ describe("ingestAlbum", () => {
       ]),
       fetchPerformanceRecords: vi.fn().mockResolvedValue([
         { kind: "chart_position", label: "Billboard 200", value: "1", source: { providerName: "encyclopedia", url: "https://enc.example/x", retrievedAt: "now" } }
-      ])
+      ]),
+      fetchArtistProfile: vi.fn().mockResolvedValue({
+        summary: { text: "Janet Jackson is an American singer.", source: { providerName: "encyclopedia", url: "https://enc.example/artist", retrievedAt: "now" } },
+        influencedBy: ["Sly and the Family Stone"],
+        influenced: ["Missy Elliott"]
+      })
     };
 
     const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia } as never);
@@ -50,16 +55,27 @@ describe("ingestAlbum", () => {
     expect(result.tags).toEqual(["funk", "pop"]);
     expect(result.contextFacts).toHaveLength(1);
     expect(result.performanceRecords).toHaveLength(1);
+    expect(result.externalId).toBe("cat-1");
+    expect(encyclopedia.fetchArtistProfile).toHaveBeenCalledWith("Janet Jackson");
+    expect(result.artistProfile.influencedBy).toEqual(["Sly and the Family Stone"]);
+    expect(result.artistProfile.influenced).toEqual(["Missy Elliott"]);
   });
 
   it("still produces a result when some providers return nothing", async () => {
-    const catalog = { providerName: "catalog", searchAlbum: vi.fn().mockResolvedValue([]) };
-    const discography = { providerName: "discography", fetchCredits: vi.fn().mockResolvedValue([]) };
+    const catalog = {
+      providerName: "catalog",
+      searchAlbum: vi.fn().mockResolvedValue([])
+    };
+    const discography = {
+      providerName: "discography",
+      fetchCredits: vi.fn().mockResolvedValue([])
+    };
     const popularity = { providerName: "popularity", fetchTags: vi.fn().mockResolvedValue([]) };
     const encyclopedia = {
       providerName: "encyclopedia",
       fetchContextFacts: vi.fn().mockResolvedValue([]),
-      fetchPerformanceRecords: vi.fn().mockResolvedValue([])
+      fetchPerformanceRecords: vi.fn().mockResolvedValue([]),
+      fetchArtistProfile: vi.fn().mockResolvedValue({ summary: null, influencedBy: [], influenced: [] })
     };
 
     const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia } as never);
@@ -67,5 +83,7 @@ describe("ingestAlbum", () => {
     expect(result.title).toBe(query.albumTitle);
     expect(result.credits).toEqual([]);
     expect(result.performanceRecords).toEqual([]);
+    expect(result.externalId).toBeUndefined();
+    expect(result.artistProfile).toEqual({ summary: null, influencedBy: [], influenced: [] });
   });
 });

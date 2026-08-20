@@ -2,80 +2,36 @@
 
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
-import { createAlbumRepository, type AlbumRow, type CreditRow } from "../lib/db/album";
-import { createSourceRepository } from "../lib/db/source";
-import type { RawCreditData } from "../lib/providers/provider.interface";
+import { createAlbumRepository } from "../lib/db/album";
 import { createPerformanceRecordRepository } from "../lib/db/performance-record";
 import { createReviewRepository } from "../lib/db/review";
 import { createCuriosityRepository } from "../lib/db/curiosity";
 import { createInfluenceRepository } from "../lib/db/influence";
 import { createNarrativeArticleRepository } from "../lib/db/narrative-article";
-import { createRecommendationRepository, type RecommendationCandidateAlbum } from "../lib/db/recommendation";
+import { createRecommendationRepository } from "../lib/db/recommendation";
+import { createDiscographyCacheRepository } from "../lib/db/discography-cache";
 import { toSupabaseLike } from "../lib/db/supabase-like";
 import { GroqClient } from "../lib/ai/client";
-import { findSameEraAlbums } from "../lib/same-era";
 import { ingestAlbum } from "../lib/ingestion/ingest-album";
 import { CatalogProvider } from "../lib/providers/catalog-provider";
 import { DiscographyProvider } from "../lib/providers/discography-provider";
 import { PopularityProvider } from "../lib/providers/popularity-provider";
 import { EncyclopediaProvider } from "../lib/providers/encyclopedia-provider";
+import { HistoricalEventsProvider } from "../lib/providers/historical-events-provider";
 import { assembleAlbumContext, type AlbumContextResult } from "../lib/ingestion/album-context";
+import {
+  findArtistDiscographyForProduction,
+  findSameEraAlbumsForProduction,
+  persistCreditsForProduction,
+  persistTracksForProduction,
+  persistPerformanceRecordsForProduction,
+  persistCuriositiesForProduction,
+  persistInfluenceForProduction,
+  findRecommendationCandidatesForProduction
+} from "../lib/ingestion/album-context-production";
 import Groq from "groq-sdk";
 
 export type { AlbumContextResult } from "../lib/ingestion/album-context";
-
-async function findSameEraAlbumsForProduction(
-  album: AlbumRow,
-  albumRepo: ReturnType<typeof createAlbumRepository>
-) {
-  const allAlbums = await albumRepo.findAllAlbums();
-  const candidates = allAlbums.map((a) => ({ id: a.id, releaseDate: new Date(a.release_date) }));
-  const sameEra = findSameEraAlbums({ id: album.id, releaseDate: new Date(album.release_date) }, candidates);
-  const matchedAlbums = allAlbums.filter((a) => sameEra.some((s) => s.id === a.id));
-
-  return Promise.all(
-    matchedAlbums.map(async (a) => ({
-      title: a.title,
-      artistName: (await albumRepo.findArtistById(a.artist_id))?.name ?? ""
-    }))
-  );
-}
-
-async function persistCreditsForProduction(
-  albumId: string,
-  rawCredits: RawCreditData[],
-  albumRepo: ReturnType<typeof createAlbumRepository>,
-  admin: ReturnType<typeof toSupabaseLike>
-): Promise<CreditRow[]> {
-  const sourceRepo = createSourceRepository(admin);
-
-  return Promise.all(
-    rawCredits.map(async (raw) => {
-      const source = await sourceRepo.create({
-        type: "music_database",
-        title: `${raw.source.providerName} release credits`,
-        url: raw.source.url,
-        published_or_retrieved_date: raw.source.retrievedAt
-      });
-      return albumRepo.createCredit({
-        album_id: albumId,
-        person_name: raw.personName,
-        role: raw.role,
-        source_id: source.id
-      });
-    })
-  );
-}
-
-async function findRecommendationCandidatesForProduction(
-  albumId: string,
-  albumRepo: ReturnType<typeof createAlbumRepository>
-): Promise<RecommendationCandidateAlbum[]> {
-  const allAlbums = await albumRepo.findAllAlbums();
-  return allAlbums
-    .filter((a) => a.id !== albumId)
-    .map((a) => ({ id: a.id, title: a.title, releaseDate: new Date(a.release_date), genre: a.genre }));
-}
 
 export async function getAlbumContext(albumId: string): Promise<AlbumContextResult> {
   const supabase = toSupabaseLike(await createSupabaseServerClient());
@@ -83,16 +39,21 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
   const albumRepo = createAlbumRepository(supabase);
   const adminAlbumRepo = createAlbumRepository(admin);
   const performanceRepo = createPerformanceRecordRepository(supabase);
+  const adminPerformanceRepo = createPerformanceRecordRepository(admin);
   const reviewRepo = createReviewRepository(supabase);
   const curiosityRepo = createCuriosityRepository(supabase);
+  const adminCuriosityRepo = createCuriosityRepository(admin);
   const influenceRepo = createInfluenceRepository(supabase);
+  const adminInfluenceRepo = createInfluenceRepository(admin);
   const narrativeArticles = createNarrativeArticleRepository(admin);
   const recommendationRepo = createRecommendationRepository(admin);
+  const discographyCacheRepo = createDiscographyCacheRepository(admin);
+  const sourceResolutionCache = new Map<string, Promise<string>>();
 
   const groqSdkClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const gptClient = new GroqClient(groqSdkClient, {
-    primaryModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
-    fallbackModel: "llama-3.1-8b-instant"
+    primaryModel: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
+    fallbackModel: "openai/gpt-oss-20b"
   });
 
   const catalog = new CatalogProvider({
@@ -104,21 +65,34 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
   const encyclopedia = new EncyclopediaProvider({
     userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
+  const historicalEvents = new HistoricalEventsProvider({
+    userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
+  });
 
   return assembleAlbumContext(albumId, {
     findAlbum: (id) => albumRepo.findAlbumById(id),
     findArtistById: (id) => albumRepo.findArtistById(id),
     findTracks: (id) => albumRepo.findTracksByAlbumId(id),
+    persistTracks: (albumId, rawTracks) => persistTracksForProduction(albumId, rawTracks, adminAlbumRepo),
     findCredits: (id) => albumRepo.findCreditsByAlbumId(id),
     persistCredits: (albumId, rawCredits) => persistCreditsForProduction(albumId, rawCredits, adminAlbumRepo, admin),
     findAlbumsByArtistId: (id) => albumRepo.findAlbumsByArtistId(id),
     findPerformanceRecords: (id) => performanceRepo.findByAlbumId(id),
+    persistPerformanceRecords: (albumId, rawRecords) =>
+      persistPerformanceRecordsForProduction(albumId, rawRecords, adminPerformanceRepo, admin),
     findReviews: (id) => reviewRepo.findByAlbumId(id),
     findCuriosities: (id) => curiosityRepo.findByAlbumId(id),
+    persistCuriosities: (albumId, items, sourceRefs) =>
+      persistCuriositiesForProduction(albumId, items, sourceRefs, adminCuriosityRepo, admin, sourceResolutionCache),
     findInfluences: (id) => influenceRepo.findByFromAlbumId(id),
+    persistInfluence: (albumId, items, sourceRefs) =>
+      persistInfluenceForProduction(albumId, items, sourceRefs, adminInfluenceRepo, admin, sourceResolutionCache),
     findSameEraAlbums: (album) => findSameEraAlbumsForProduction(album, albumRepo),
-    findHistoricalEvents: async () => [],
+    findArtistDiscography: (artist) =>
+      findArtistDiscographyForProduction(artist, catalog, adminAlbumRepo, discographyCacheRepo),
+    findHistoricalEvents: (releaseDate) => historicalEvents.fetchEvents(releaseDate),
     ingestAlbum: (query) => ingestAlbum(query, { catalog, discography, popularity, encyclopedia }),
+    fetchTracks: (externalId) => catalog.fetchTracks(externalId),
     gptClient,
     narrativeArticles,
     findRecommendationCandidates: (id) => findRecommendationCandidatesForProduction(id, albumRepo),

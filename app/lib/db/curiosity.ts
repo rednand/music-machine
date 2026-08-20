@@ -20,12 +20,15 @@ export interface CreateCuriosityInput {
 export function createCuriosityRepository(supabase: SupabaseLike) {
   return {
     async create(input: CreateCuriosityInput): Promise<CuriosityRow> {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from<CuriosityRow>("curiosities")
         .insert({ status: "unconfirmed", ...input })
         .select()
         .single();
-      return data as CuriosityRow;
+      if (!data) {
+        throw new Error(`Failed to create curiosity: ${error ? JSON.stringify(error) : "no row returned"}`);
+      }
+      return data;
     },
 
     async findByAlbumId(albumId: string): Promise<CuriosityRow[]> {

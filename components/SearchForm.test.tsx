@@ -32,6 +32,26 @@ describe("SearchForm", () => {
     expect(screen.getByRole("link", { name: /control/i })).toHaveAttribute("href", "/albums/album-1");
   });
 
+  it("shows a loading indicator while a search is in progress, then hides it once results arrive", async () => {
+    let resolveSearch: (value: searchAction.SearchResultItem[]) => void = () => {};
+    vi.spyOn(searchAction, "searchCatalog").mockImplementation(
+      () => new Promise((resolve) => { resolveSearch = resolve; })
+    );
+
+    render(<SearchForm />);
+
+    await userEvent.type(screen.getByRole("searchbox"), "Control");
+    await userEvent.click(screen.getByRole("button", { name: /buscar/i }));
+
+    expect(await screen.findByText(/buscando/i)).toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toBeDisabled();
+
+    resolveSearch([{ kind: "known", id: "album-1", title: "Control", artistName: "Janet Jackson", releaseDate: "1986-02-04" }]);
+
+    await waitFor(() => expect(screen.queryByText(/buscando/i)).not.toBeInTheDocument());
+    expect(screen.getByRole("searchbox")).toBeEnabled();
+  });
+
   it("shows a no-results message when nothing matches", async () => {
     vi.spyOn(searchAction, "searchCatalog").mockResolvedValue([]);
 

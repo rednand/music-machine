@@ -42,10 +42,14 @@ export function createFakeSupabase(tables: FakeSupabaseTables) {
 
     const builder = {
       select: vi.fn().mockImplementation(() => builder),
-      insert: vi.fn().mockImplementation((data: FakeRow) => {
-        idCounter += 1;
-        pendingInsert = { id: `${tableName}-${idCounter}`, ...data };
-        tables[tableName].push(pendingInsert);
+      insert: vi.fn().mockImplementation((data: FakeRow | FakeRow[]) => {
+        const rows = Array.isArray(data) ? data : [data];
+        const inserted = rows.map((row) => {
+          idCounter += 1;
+          return { id: `${tableName}-${idCounter}`, ...row };
+        });
+        tables[tableName].push(...inserted);
+        pendingInsert = inserted[inserted.length - 1] ?? null;
         return builder;
       }),
       update: vi.fn().mockImplementation((data: FakeRow) => {

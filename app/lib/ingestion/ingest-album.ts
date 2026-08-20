@@ -1,5 +1,6 @@
 import type {
   AlbumLookupQuery,
+  ArtistProfileData,
   RawAlbumData,
   RawContextFactData,
   RawCreditData,
@@ -15,7 +16,10 @@ export interface IngestionProviders {
   catalog: Pick<CatalogProvider, "providerName" | "searchAlbum">;
   discography: Pick<DiscographyProvider, "providerName" | "fetchCredits">;
   popularity: Pick<PopularityProvider, "providerName" | "fetchTags">;
-  encyclopedia: Pick<EncyclopediaProvider, "providerName" | "fetchContextFacts" | "fetchPerformanceRecords">;
+  encyclopedia: Pick<
+    EncyclopediaProvider,
+    "providerName" | "fetchContextFacts" | "fetchPerformanceRecords" | "fetchArtistProfile"
+  >;
 }
 
 export interface IngestedAlbum {
@@ -27,10 +31,12 @@ export interface IngestedAlbum {
   durationSeconds?: number;
   trackCount?: number;
   coverArtUrl?: string;
+  externalId?: string;
   credits: RawCreditData[];
   performanceRecords: RawPerformanceRecordData[];
   contextFacts: RawContextFactData[];
   tags: string[];
+  artistProfile: ArtistProfileData;
 }
 
 function firstDefined<T>(candidates: Array<T | undefined>): T | undefined {
@@ -41,17 +47,20 @@ export async function ingestAlbum(
   query: AlbumLookupQuery,
   providers: IngestionProviders
 ): Promise<IngestedAlbum> {
-  const [catalogResults, credits, tags, contextFacts, performanceRecords] = await Promise.all([
+  const [catalogResults, credits, tags, contextFacts, performanceRecords, artistProfile] = await Promise.all([
     providers.catalog.searchAlbum(query),
     providers.discography.fetchCredits(query),
     providers.popularity.fetchTags(query),
     providers.encyclopedia.fetchContextFacts(query),
-    providers.encyclopedia.fetchPerformanceRecords(query)
+    providers.encyclopedia.fetchPerformanceRecords(query),
+    providers.encyclopedia.fetchArtistProfile(query.artistName)
   ]);
 
   const catalogEntries: Array<{ providerName: string; data: RawAlbumData }> = catalogResults.map(
     (data) => ({ providerName: providers.catalog.providerName, data })
   );
+
+  const first = catalogEntries[0]?.data;
 
   const releaseDateCandidates: Array<FactCandidate<string>> = catalogEntries.map((entry) => ({
     value: entry.data.releaseDate,
@@ -64,8 +73,6 @@ export async function ingestAlbum(
       ? reconcileField(releaseDateCandidates)
       : { value: "", discrepancy: false };
 
-  const first = catalogEntries[0]?.data;
-
   return {
     title: first?.title ?? query.albumTitle,
     artistName: first?.artistName ?? query.artistName,
@@ -75,9 +82,11 @@ export async function ingestAlbum(
     durationSeconds: firstDefined(catalogEntries.map((e) => e.data.durationSeconds)),
     trackCount: firstDefined(catalogEntries.map((e) => e.data.trackCount)),
     coverArtUrl: firstDefined(catalogEntries.map((e) => e.data.coverArtUrl)),
+    externalId: first?.externalId,
     credits,
     performanceRecords,
     contextFacts,
-    tags
+    tags,
+    artistProfile
   };
 }

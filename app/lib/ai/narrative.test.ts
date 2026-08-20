@@ -93,15 +93,30 @@ describe("synthesizeNarrative", () => {
     expect(result.facets.artist_moment.generationFailed).toBeUndefined();
   });
 
-  it("instructs the model to write connected prose and avoid repeating basic album facts already shown in the header", async () => {
+  it("instructs the model to avoid repeating basic album facts already shown in the header, for every facet", async () => {
     const gptClient = { complete: vi.fn().mockResolvedValue(fakeGptResponseWithFacet("artist_moment")) };
 
     await synthesizeNarrative(baseInput, gptClient);
 
     for (const call of gptClient.complete.mock.calls) {
-      expect(call[0]).toMatch(/texto corrido e conectado/i);
       expect(call[0]).toMatch(/não repita essas informações básicas/i);
     }
+  });
+
+  it("instructs only artist_moment and musical_scene to write connected prose", async () => {
+    const gptClient = { complete: vi.fn().mockResolvedValue(fakeGptResponseWithFacet("artist_moment")) };
+
+    await synthesizeNarrative(baseInput, gptClient);
+
+    const artistMomentPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: artist_moment"))?.[0];
+    const musicalScenePrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: musical_scene"))?.[0];
+    const worldContextPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: world_context"))?.[0];
+    const receptionPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: reception_vs_legacy"))?.[0];
+
+    expect(artistMomentPrompt).toMatch(/texto corrido e conectado/i);
+    expect(musicalScenePrompt).toMatch(/texto corrido e conectado/i);
+    expect(worldContextPrompt).not.toMatch(/texto corrido e conectado/i);
+    expect(receptionPrompt).not.toMatch(/texto corrido e conectado/i);
   });
 
   it("gives each facet a distinct focus instruction so sections don't overlap", async () => {
@@ -124,7 +139,25 @@ describe("synthesizeNarrative", () => {
     const worldContextPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: world_context"))?.[0];
 
     expect(worldContextPrompt).toMatch(/cultura pop/i);
-    expect(worldContextPrompt).toMatch(/política, cultura, tecnologia/i);
+    expect(worldContextPrompt).toMatch(/política.*eventos históricos/i);
+    expect(worldContextPrompt).toMatch(/tecnologia/i);
+  });
+
+  it("instructs world_context and reception_vs_legacy to return a fixed number of standalone statements, not connected prose", async () => {
+    const gptClient = { complete: vi.fn().mockResolvedValue(fakeGptResponseWithFacet("world_context")) };
+
+    await synthesizeNarrative(baseInput, gptClient);
+
+    const worldContextPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: world_context"))?.[0];
+    const receptionPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: reception_vs_legacy"))?.[0];
+    const artistMomentPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: artist_moment"))?.[0];
+
+    expect(worldContextPrompt).toMatch(/exatamente 3 statements/i);
+    expect(worldContextPrompt).toMatch(/bloco independente e autocontido/i);
+    expect(receptionPrompt).toMatch(/exatamente 2 statements/i);
+    expect(receptionPrompt).toMatch(/no lançamento/i);
+    expect(receptionPrompt).toMatch(/bloco independente e autocontido/i);
+    expect(artistMomentPrompt).toMatch(/texto corrido e conectado/i);
   });
 
   it("only generates the requested subset of facets, leaving the rest absent", async () => {

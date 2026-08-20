@@ -129,7 +129,8 @@ export async function resolveSearchCandidate(query: string, externalId: string):
     }
 
     return { state: "ready", albumId: album.id };
-  } catch {
+  } catch (error) {
+    console.error("Failed to resolve search candidate", { query, externalId, error });
     return { state: "error", message: "Não foi possível salvar este item. Tente novamente." };
   }
 }

@@ -3,33 +3,38 @@ import { describe, expect, it } from "vitest";
 import { InfluenceList } from "./InfluenceList";
 
 describe("InfluenceList", () => {
-  it("renders each influence with its explanation", () => {
+  it("renders each influence with its artist name and explanation", () => {
     render(
       <InfluenceList
         influences={[
-          { id: "i1", from_album_id: "a1", to_album_id: "a2", explanation: "Definiu o new jack swing.", source_id: "s1" }
+          { id: "i1", artistName: "Britney Spears", albumId: "a2", explanation: "Herdou o manual de reinvenção visual." }
         ]}
       />
     );
 
-    expect(screen.getByText("Definiu o new jack swing.")).toBeInTheDocument();
+    expect(screen.getByText("Britney Spears")).toBeInTheDocument();
+    expect(screen.getByText("Herdou o manual de reinvenção visual.")).toBeInTheDocument();
   });
 
-  it("renders nothing when there is no known influence", () => {
-    const { container } = render(<InfluenceList influences={[]} />);
+  it("shows a fallback message when there is no known influence", () => {
+    render(<InfluenceList influences={[]} />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByText("Nenhuma influência registrada para este álbum.")).toBeInTheDocument();
   });
 
   it("links to the influenced album when it is known", () => {
     render(
       <InfluenceList
-        influences={[
-          { id: "i1", from_album_id: "a1", to_album_id: "a2", explanation: "Definiu o new jack swing.", source_id: "s1" }
-        ]}
+        influences={[{ id: "i1", artistName: "Britney Spears", albumId: "a2", explanation: "Definiu o new jack swing." }]}
       />
     );
 
     expect(screen.getByRole("link")).toHaveAttribute("href", "/albums/a2");
+  });
+
+  it("omits the album link when no album is known", () => {
+    render(<InfluenceList influences={[{ id: "i1", artistName: "Kylie Minogue", explanation: "Absorveu a fórmula pop." }]} />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

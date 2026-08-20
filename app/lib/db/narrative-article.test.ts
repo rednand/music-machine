@@ -18,6 +18,46 @@ describe("NarrativeArticleRepository state machine", () => {
     expect(published.generated_at).toBeTruthy();
   });
 
+  it("returns the already-persisted article instead of throwing when a concurrent request already created it", async () => {
+    const existingArticle = { id: "article-1", album_id: "album-1", facet: "world_context", status: "pending", language: "pt-BR" };
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "23505", message: "duplicate key value" } })
+          })
+        }),
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: existingArticle, error: null })
+            })
+          })
+        })
+      })
+    };
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    const result = await repo.createPending("album-1", "world_context");
+
+    expect(result).toEqual(existingArticle);
+  });
+
+  it("still throws for a genuine failure that isn't a unique-constraint conflict", async () => {
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "500", message: "connection reset" } })
+          })
+        })
+      })
+    };
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    await expect(repo.createPending("album-1", "world_context")).rejects.toThrow();
+  });
+
   it("moves from pending to failed_validation", async () => {
     const supabase = createFakeSupabase({});
     const repo = createNarrativeArticleRepository(supabase as never);

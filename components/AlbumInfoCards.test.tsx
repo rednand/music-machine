@@ -8,6 +8,8 @@ describe("AlbumInfoCards", () => {
       <AlbumInfoCards
         releaseDate="1986-06-30"
         label="Sire / Warner Bros."
+        title="True Blue"
+        artistName="Madonna"
         credits={[
           { id: "c1", album_id: "album-1", person_name: "Madonna", role: "Producer", source_id: "s1" },
           { id: "c2", album_id: "album-1", person_name: "Patrick Leonard", role: "Producer", source_id: "s1" },
@@ -25,10 +27,23 @@ describe("AlbumInfoCards", () => {
   });
 
   it("omits gravadora and produção cards when there is no label or production credit", () => {
-    render(<AlbumInfoCards releaseDate="1986-06-30" credits={[]} />);
+    render(<AlbumInfoCards releaseDate="1986-06-30" credits={[]} title="True Blue" artistName="Madonna" />);
 
     expect(screen.getByText("LANÇAMENTO")).toBeInTheDocument();
     expect(screen.queryByText("GRAVADORA")).not.toBeInTheDocument();
     expect(screen.queryByText("PRODUÇÃO")).not.toBeInTheDocument();
+  });
+
+  it("renders a streaming icon link per platform, built from the album title and artist", () => {
+    render(<AlbumInfoCards releaseDate="1986-06-30" credits={[]} title="True Blue" artistName="Madonna" />);
+
+    expect(screen.getByText("OUVIR")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ouvir no deezer/i })).toHaveAttribute(
+      "href",
+      "https://www.deezer.com/search/Madonna%20True%20Blue"
+    );
+    expect(screen.getByRole("link", { name: /ouvir no spotify/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ouvir no youtube music/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ouvir no apple music/i })).toBeInTheDocument();
   });
 });

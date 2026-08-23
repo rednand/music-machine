@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/app/actions/auth";
 
 const NAV_ITEMS = [
   { href: "/", label: "Acervo" },
   { href: "/years", label: "Eras" }
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -18,8 +19,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0"
         style={{
+          transition: "background 700ms ease",
           background:
-            "radial-gradient(900px 620px at 82% -6%, rgba(209,20,90,0.16), transparent 62%), radial-gradient(760px 560px at 4% 12%, rgba(109,92,224,0.16), transparent 60%), radial-gradient(1100px 700px at 60% 74%, rgba(13,122,92,0.11), transparent 62%), radial-gradient(700px 500px at 12% 96%, rgba(255,178,102,0.13), transparent 60%)"
+            "radial-gradient(1000px 700px at 82% -6%, rgba(var(--album-tint, 209, 20, 90), var(--album-tint-alpha, 0.16)), transparent 65%), radial-gradient(760px 560px at 4% 12%, rgba(109,92,224,0.16), transparent 60%), radial-gradient(1100px 700px at 60% 74%, rgba(13,122,92,0.11), transparent 62%), radial-gradient(700px 500px at 12% 96%, rgba(255,178,102,0.13), transparent 60%)"
         }}
       />
 
@@ -62,9 +64,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="relative bg-white/50 font-mono text-[9.5px] tracking-[0.26em] text-[#a8a2b0] backdrop-blur-xl [writing-mode:vertical-rl]">
-          1980 — HOJE
-        </div>
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="relative bg-white/50 font-mono text-[9.5px] tracking-[0.26em] text-[#d1145a] backdrop-blur-xl [writing-mode:vertical-rl] hover:text-[#120f18]"
+          >
+            SAIR
+          </button>
+        ) : null}
       </aside>
 
       <main className="relative z-10 pb-16 md:pb-0 md:pl-[clamp(104px,9vw,140px)]">{children}</main>

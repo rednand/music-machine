@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
 import { createAlbumRepository } from "../lib/db/album";
@@ -12,13 +13,23 @@ import { createRecommendationRepository } from "../lib/db/recommendation";
 import { createDiscographyCacheRepository } from "../lib/db/discography-cache";
 import { toSupabaseLike } from "../lib/db/supabase-like";
 import { GroqClient } from "../lib/ai/client";
+import { GeminiClient } from "../lib/ai/gemini-client";
+import { FallbackChatCompletionClient } from "../lib/ai/fallback-client";
 import { ingestAlbum } from "../lib/ingestion/ingest-album";
 import { CatalogProvider } from "../lib/providers/catalog-provider";
 import { DiscographyProvider } from "../lib/providers/discography-provider";
 import { PopularityProvider } from "../lib/providers/popularity-provider";
 import { EncyclopediaProvider } from "../lib/providers/encyclopedia-provider";
 import { HistoricalEventsProvider } from "../lib/providers/historical-events-provider";
-import { assembleAlbumContext, type AlbumContextResult } from "../lib/ingestion/album-context";
+import { MusicBrainzProvider } from "../lib/providers/musicbrainz-provider";
+import {
+  assembleTechnicalSheet,
+  assembleNarrative,
+  type TechnicalSheetResult,
+  type NarrativeResult,
+  type AlbumContextDeps
+} from "../lib/ingestion/album-context";
+import { InMemoryRateLimiter } from "../lib/rate-limit";
 import {
   findArtistDiscographyForProduction,
   findSameEraAlbumsForProduction,
@@ -31,9 +42,11 @@ import {
 } from "../lib/ingestion/album-context-production";
 import Groq from "groq-sdk";
 
-export type { AlbumContextResult } from "../lib/ingestion/album-context";
+export type { TechnicalSheetResult, NarrativeResult } from "../lib/ingestion/album-context";
 
-export async function getAlbumContext(albumId: string): Promise<AlbumContextResult> {
+const narrativeTriggerLimiter = new InMemoryRateLimiter();
+
+async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
   const supabase = toSupabaseLike(await createSupabaseServerClient());
   const admin = toSupabaseLike(createSupabaseAdminClient());
   const albumRepo = createAlbumRepository(supabase);
@@ -51,15 +64,33 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
   const sourceResolutionCache = new Map<string, Promise<string>>();
 
   const groqSdkClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  const gptClient = new GroqClient(groqSdkClient, {
-    primaryModel: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
-    fallbackModel: "openai/gpt-oss-20b"
+  const groqClient = new GroqClient(groqSdkClient, {
+    models: [
+      process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.6-27b",
+      "groq/compound",
+      "groq/compound-mini"
+    ]
   });
+  const geminiClient = new GeminiClient({
+    apiKey: process.env.GEMINI_API_KEY ?? "",
+    models: [
+      process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-flash-lite-latest",
+      "gemini-3.1-flash-lite-preview",
+      "gemini-3-flash-preview",
+      "gemini-3.5-flash",
+      "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-flash-latest",
+      "gemini-pro-latest"
+    ]
+  });
+  const gptClient = new FallbackChatCompletionClient([groqClient, geminiClient]);
 
-  const catalog = new CatalogProvider({
-    clientId: process.env.CATALOG_PROVIDER_CLIENT_ID ?? "",
-    clientSecret: process.env.CATALOG_PROVIDER_CLIENT_SECRET ?? ""
-  });
+  const catalog = new CatalogProvider();
   const discography = new DiscographyProvider({ token: process.env.DISCOGRAPHY_PROVIDER_TOKEN ?? "" });
   const popularity = new PopularityProvider({ apiKey: process.env.POPULARITY_PROVIDER_API_KEY ?? "" });
   const encyclopedia = new EncyclopediaProvider({
@@ -68,8 +99,11 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
   const historicalEvents = new HistoricalEventsProvider({
     userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
+  const musicbrainz = new MusicBrainzProvider({
+    userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
+  });
 
-  return assembleAlbumContext(albumId, {
+  return {
     findAlbum: (id) => albumRepo.findAlbumById(id),
     findArtistById: (id) => albumRepo.findArtistById(id),
     findTracks: (id) => albumRepo.findTracksByAlbumId(id),
@@ -91,7 +125,7 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
     findArtistDiscography: (artist) =>
       findArtistDiscographyForProduction(artist, catalog, adminAlbumRepo, discographyCacheRepo),
     findHistoricalEvents: (releaseDate) => historicalEvents.fetchEvents(releaseDate),
-    ingestAlbum: (query) => ingestAlbum(query, { catalog, discography, popularity, encyclopedia }),
+    ingestAlbum: (query) => ingestAlbum(query, { catalog, discography, popularity, encyclopedia, musicbrainz }),
     fetchTracks: (externalId) => catalog.fetchTracks(externalId),
     gptClient,
     narrativeArticles,
@@ -100,6 +134,22 @@ export async function getAlbumContext(albumId: string): Promise<AlbumContextResu
       const influences = await influenceRepo.findByFromAlbumId(id);
       return new Set(influences.map((i) => i.to_album_id).filter((id): id is string => Boolean(id)));
     },
-    recommendations: recommendationRepo
-  });
+    recommendations: recommendationRepo,
+    dedupeNarrativeTrigger: (albumId) =>
+      narrativeTriggerLimiter.checkAndIncrement(`narrative-trigger:${albumId}`, { maxRequests: 1, windowSeconds: 300 })
+        .allowed,
+    scheduleBackgroundWork: (run) => {
+      after(run);
+    }
+  };
+}
+
+export async function getAlbumTechnicalSheet(albumId: string): Promise<TechnicalSheetResult> {
+  const deps = await buildAlbumContextDeps();
+  return assembleTechnicalSheet(albumId, deps);
+}
+
+export async function getAlbumNarrative(albumId: string): Promise<NarrativeResult> {
+  const deps = await buildAlbumContextDeps();
+  return assembleNarrative(albumId, deps);
 }

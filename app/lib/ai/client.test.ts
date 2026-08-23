@@ -12,7 +12,7 @@ function fakeGroq(response: string | null): GroqLikeClient {
 }
 
 describe("GroqClient", () => {
-  const config = { primaryModel: "primary-model", fallbackModel: "fallback-model" };
+  const config = { models: ["primary-model", "fallback-model"] };
 
   it("returns the primary model's completion when it succeeds", async () => {
     const groq = fakeGroq("resposta primaria");
@@ -66,5 +66,28 @@ describe("GroqClient", () => {
     const client = new GroqClient(groq, config);
 
     await expect(client.complete("prompt")).rejects.toThrow(GroqEmptyResponseError);
+  });
+
+  it("tries every configured model in order until one succeeds", async () => {
+    const groq: GroqLikeClient = {
+      chat: {
+        completions: {
+          create: vi
+            .fn()
+            .mockRejectedValueOnce(new Error("first model unavailable"))
+            .mockRejectedValueOnce(new Error("second model unavailable"))
+            .mockResolvedValueOnce({ choices: [{ message: { content: "resposta terceiro modelo" } }] })
+        }
+      }
+    };
+    const client = new GroqClient(groq, { models: ["model-1", "model-2", "model-3"] });
+
+    const result = await client.complete("prompt");
+
+    expect(result).toBe("resposta terceiro modelo");
+    expect(groq.chat.completions.create).toHaveBeenCalledTimes(3);
+    expect(groq.chat.completions.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ model: "model-3" })
+    );
   });
 });

@@ -5,10 +5,10 @@ import { createSupabaseAdminClient } from "../lib/supabase/admin";
 import { createAlbumRepository, type AlbumRow } from "../lib/db/album";
 import { toSupabaseLike } from "../lib/db/supabase-like";
 import { CatalogProvider } from "../lib/providers/catalog-provider";
+import { MusicBrainzProvider, buildReleaseGroupSearchUrl } from "../lib/providers/musicbrainz-provider";
 import type { RawAlbumData } from "../lib/providers/provider.interface";
 import { ingestSingleCandidate } from "../lib/ingestion/search-fallback";
-
-const MAX_CANDIDATES = 5;
+import { earlierFullDate } from "../lib/ingestion/ingest-album";
 
 export interface KnownSearchResult {
   kind: "known";
@@ -17,6 +17,7 @@ export interface KnownSearchResult {
   artistName?: string;
   releaseDate?: string;
   coverArtUrl?: string;
+  sourceUrl: "local_database";
 }
 
 export interface CandidateSearchResult {
@@ -27,6 +28,8 @@ export interface CandidateSearchResult {
   artistName: string;
   releaseDate: string;
   coverArtUrl?: string;
+  sourceUrl: string;
+  musicBrainzUrl: string;
 }
 
 export type SearchResultItem = KnownSearchResult | CandidateSearchResult;
@@ -40,7 +43,8 @@ function albumToResult(album: AlbumRow, artistName?: string): KnownSearchResult 
     title: album.title,
     artistName,
     releaseDate: album.release_date,
-    coverArtUrl: album.cover_art_url
+    coverArtUrl: album.cover_art_url,
+    sourceUrl: "local_database"
   };
 }
 
@@ -52,21 +56,44 @@ function candidateToResult(query: string, candidate: RawAlbumData): CandidateSea
     title: candidate.title,
     artistName: candidate.artistName,
     releaseDate: candidate.releaseDate,
-    coverArtUrl: candidate.coverArtUrl
+    coverArtUrl: candidate.coverArtUrl,
+    sourceUrl: candidate.source.url,
+    musicBrainzUrl: buildReleaseGroupSearchUrl({ artistName: candidate.artistName, albumTitle: candidate.title })
   };
 }
 
 function createCatalogProvider(): CatalogProvider {
-  return new CatalogProvider({
-    clientId: process.env.CATALOG_PROVIDER_CLIENT_ID ?? "",
-    clientSecret: process.env.CATALOG_PROVIDER_CLIENT_SECRET ?? ""
+  return new CatalogProvider();
+}
+
+function createMusicBrainzProvider(): MusicBrainzProvider {
+  return new MusicBrainzProvider({
+    userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
+}
+
+async function reconcileReleaseDate(candidate: RawAlbumData): Promise<RawAlbumData> {
+  const originalReleaseDate = await createMusicBrainzProvider().fetchOriginalReleaseDate({
+    artistName: candidate.artistName,
+    albumTitle: candidate.title
+  });
+  return { ...candidate, releaseDate: earlierFullDate(candidate.releaseDate, originalReleaseDate) };
 }
 
 async function searchExternalCandidates(query: string): Promise<CandidateSearchResult[]> {
   const catalog = createCatalogProvider();
   const results = await catalog.searchByText(query);
-  return results.slice(0, MAX_CANDIDATES).map((candidate) => candidateToResult(query, candidate));
+
+  const reconciled: RawAlbumData[] = [];
+  for (const candidate of results) {
+    reconciled.push(await reconcileReleaseDate(candidate));
+  }
+
+  return reconciled.map((candidate) => candidateToResult(query, candidate));
+}
+
+function dedupeKey(title: string, artistName: string | undefined): string {
+  return `${title.trim().toLowerCase()}|${(artistName ?? "").trim().toLowerCase()}`;
 }
 
 export async function searchCatalog(query: string): Promise<SearchResultItem[]> {
@@ -82,10 +109,6 @@ export async function searchCatalog(query: string): Promise<SearchResultItem[]> 
     repository.searchArtists(query)
   ]);
 
-  if (titleMatches.length === 0 && artists.length === 0) {
-    return searchExternalCandidates(query);
-  }
-
   const artistAlbumLists = await Promise.all(artists.map((artist) => repository.findAlbumsByArtistId(artist.id)));
 
   const seenAlbumIds = new Set<string>();
@@ -97,12 +120,20 @@ export async function searchCatalog(query: string): Promise<SearchResultItem[]> 
     return true;
   });
 
-  return Promise.all(
-    albums.map(async (album) => {
-      const artist = await repository.findArtistById(album.artist_id);
-      return albumToResult(album, artist?.name);
-    })
-  );
+  const [knownResults, candidates] = await Promise.all([
+    Promise.all(
+      albums.map(async (album) => {
+        const artist = await repository.findArtistById(album.artist_id);
+        return albumToResult(album, artist?.name);
+      })
+    ),
+    searchExternalCandidates(query)
+  ]);
+
+  const knownKeys = new Set(knownResults.map((result) => dedupeKey(result.title, result.artistName)));
+  const newCandidates = candidates.filter((candidate) => !knownKeys.has(dedupeKey(candidate.title, candidate.artistName)));
+
+  return [...knownResults, ...newCandidates];
 }
 
 export async function resolveSearchCandidate(query: string, externalId: string): Promise<ResolveCandidateResult> {
@@ -115,9 +146,11 @@ export async function resolveSearchCandidate(query: string, externalId: string):
       return { state: "error", message: "Não foi possível confirmar este item. Tente buscar novamente." };
     }
 
+    const correctedCandidate = await reconcileReleaseDate(matched);
+
     const adminRepo = createAlbumRepository(toSupabaseLike(createSupabaseAdminClient()));
 
-    const album = await ingestSingleCandidate(matched, {
+    const album = await ingestSingleCandidate(correctedCandidate, {
       findArtistByName: (name) => adminRepo.findArtistByName(name),
       createArtist: (input) => adminRepo.createArtist(input),
       findAlbumBySlug: (slug) => adminRepo.findAlbumBySlug(slug),

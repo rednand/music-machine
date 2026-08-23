@@ -10,22 +10,41 @@ import {
   type KnownSearchResult,
   type SearchResultItem
 } from "@/app/actions/search";
-import { searchSongs, type SongSearchResult } from "@/app/actions/song-search";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { cn } from "@/lib/utils";
 
-type SearchMode = "album" | "song";
+type SearchMode = "album" | "year";
 
 function resultHref(result: KnownSearchResult): string {
   return `/albums/${result.id}`;
 }
 
-export function SearchForm() {
+function releaseYear(releaseDate?: string): string | null {
+  return releaseDate ? releaseDate.slice(0, 4) : null;
+}
+
+function resultSubtitle(artistName: string | undefined, releaseDate?: string): string {
+  return [artistName?.toUpperCase(), releaseYear(releaseDate)].filter(Boolean).join(" · ");
+}
+
+function debugEndpoints(results: SearchResultItem[]): string[] {
+  const endpoints = new Set<string>();
+  for (const result of results) {
+    if (result.kind === "known") {
+      endpoints.add("Banco local (Supabase) — nenhuma chamada externa");
+    } else {
+      endpoints.add(result.sourceUrl);
+      endpoints.add(result.musicBrainzUrl);
+    }
+  }
+  return Array.from(endpoints);
+}
+
+export function SearchForm({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
   const [mode, setMode] = useState<SearchMode>("album");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[] | null>(null);
-  const [songResults, setSongResults] = useState<SongSearchResult[] | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -34,16 +53,15 @@ export function SearchForm() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+
+    if (mode === "year") {
+      setIsNavigating(true);
+      router.push(`/years/${query.trim()}`);
+      return;
+    }
+
     setIsSearching(true);
-
     try {
-      if (mode === "song") {
-        setResults(null);
-        setSongResults(await searchSongs(query));
-        return;
-      }
-
-      setSongResults(null);
       setResults(await searchCatalog(query));
     } finally {
       setIsSearching(false);
@@ -78,10 +96,10 @@ export function SearchForm() {
           </button>
           <button
             type="button"
-            onClick={() => setMode("song")}
-            className={cn("transition-colors", mode === "song" ? "text-[#d1145a]" : "text-[#6b6577] hover:text-[#d1145a]")}
+            onClick={() => setMode("year")}
+            className={cn("transition-colors", mode === "year" ? "text-[#d1145a]" : "text-[#6b6577] hover:text-[#d1145a]")}
           >
-            MÚSICA
+            ANO
           </button>
         </div>
         <div className="flex items-center gap-4 border-b border-[#171420]/[0.22] px-0.5 pb-3.5">
@@ -89,9 +107,10 @@ export function SearchForm() {
           <input
             role="searchbox"
             type="search"
+            inputMode={mode === "year" ? "numeric" : "text"}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={mode === "song" ? "digite o nome de uma música..." : "digite um artista, álbum ou ano..."}
+            placeholder={mode === "year" ? "digite um ano, ex: 1986..." : "digite um artista, álbum ou ano..."}
             disabled={isSearching || isNavigating}
             className="w-full border-0 bg-transparent text-base text-[#171420] outline-none placeholder:text-[#a8a2b0] disabled:opacity-60"
           />
@@ -102,38 +121,16 @@ export function SearchForm() {
       </form>
 
       {isSearching && <LoadingIndicator label="Buscando..." className="mt-4" />}
-      {isNavigating && <LoadingIndicator label="Abrindo álbum..." className="mt-4" />}
+      {isNavigating && <LoadingIndicator label={mode === "year" ? "Abrindo ano..." : "Abrindo álbum..."} className="mt-4" />}
 
       {error && <p className="mt-4 text-[#d1145a]">{error}</p>}
-
-      {songResults !== null && songResults.length === 0 && (
-        <p className="mt-4 font-light text-[#443f4f]">Nenhuma música encontrada. Tente buscar por álbum.</p>
-      )}
-
-      {songResults !== null && songResults.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-2">
-          {songResults.map((song) => (
-            <li key={song.trackId}>
-              <Link
-                href={`/albums/${song.albumId}?track=${song.trackId}`}
-                className="block rounded-lg border border-white/90 bg-white/50 p-3 backdrop-blur-xl transition-colors hover:border-[#d1145a]/40 hover:bg-white/70"
-              >
-                <span className="font-serif text-lg text-[#120f18]">{song.title}</span>
-                <span className="block font-mono text-[10px] tracking-[0.18em] text-[#6b6577]">
-                  {song.albumTitle.toUpperCase()} · {song.artistName.toUpperCase()}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
 
       {results !== null && results.length === 0 && (
         <p className="mt-4 font-light text-[#443f4f]">Nenhum resultado encontrado.</p>
       )}
 
       {results !== null && results.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-2">
+        <ul className="mt-4 flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1">
           {results.map((result) =>
             result.kind === "known" ? (
               <li key={`known-${result.id}`}>
@@ -142,9 +139,9 @@ export function SearchForm() {
                   className="block rounded-lg border border-white/90 bg-white/50 p-3 backdrop-blur-xl transition-colors hover:border-[#d1145a]/40 hover:bg-white/70"
                 >
                   <span className="font-serif text-lg text-[#120f18]">{result.title}</span>
-                  {result.artistName && (
+                  {resultSubtitle(result.artistName, result.releaseDate) && (
                     <span className="block font-mono text-[10px] tracking-[0.18em] text-[#6b6577]">
-                      {result.artistName.toUpperCase()}
+                      {resultSubtitle(result.artistName, result.releaseDate)}
                     </span>
                   )}
                 </Link>
@@ -159,7 +156,7 @@ export function SearchForm() {
                 >
                   <span className="font-serif text-lg text-[#120f18]">{result.title}</span>
                   <span className="block font-mono text-[10px] tracking-[0.18em] text-[#6b6577]">
-                    {result.artistName.toUpperCase()}
+                    {resultSubtitle(result.artistName, result.releaseDate)}
                   </span>
                   {resolvingId === result.externalId && (
                     <span className="mt-1 block font-mono text-[10px] tracking-[0.18em] text-[#d1145a]">
@@ -171,6 +168,25 @@ export function SearchForm() {
             )
           )}
         </ul>
+      )}
+
+      {isAdmin && results !== null && (
+        <details className="mt-6 rounded-lg border border-white/90 bg-white/50 p-3 backdrop-blur-xl">
+          <summary className="cursor-pointer font-mono text-[10px] tracking-[0.18em] text-[#6b6577]">
+            DEBUG: RETORNO BRUTO DO ENDPOINT
+          </summary>
+          <p className="mt-3 font-mono text-[10px] tracking-[0.14em] text-[#6b6577]">ENDPOINTS CHAMADOS:</p>
+          <ul className="mt-1 list-disc pl-4 font-mono text-[11px] text-[#443f4f]">
+            {debugEndpoints(results).map((endpoint) => (
+              <li key={endpoint} className="break-all">
+                {endpoint}
+              </li>
+            ))}
+          </ul>
+          <pre className="mt-3 max-h-[400px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-[#443f4f]">
+            {JSON.stringify(results, null, 2)}
+          </pre>
+        </details>
       )}
     </div>
   );

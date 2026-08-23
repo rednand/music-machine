@@ -36,8 +36,12 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
             <div className="font-mono text-[9.5px] tracking-[0.22em] text-[#0d7a5c]">
               {recommendation.releaseYear} · {REASON_LABEL[recommendation.reason]}
             </div>
-            <div className="truncate font-serif text-lg font-bold text-[#120f18]">{recommendation.title}</div>
-            <div className="truncate font-sans text-sm text-[#6b6577]">{recommendation.artistName}</div>
+            <div title={recommendation.title} className="truncate font-serif text-lg font-bold text-[#120f18]">
+              {recommendation.title}
+            </div>
+            <div title={recommendation.artistName} className="truncate font-sans text-sm text-[#6b6577]">
+              {recommendation.artistName}
+            </div>
           </div>
         </Link>
       ))}

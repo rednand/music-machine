@@ -1,7 +1,9 @@
 import type { AlbumContextHeader } from "@/app/lib/ingestion/album-context";
+import { buildStreamingLinks } from "@/app/lib/streaming-links";
 
 export function Header({ header }: { header: AlbumContextHeader }) {
   const year = header.releaseDate.slice(0, 4);
+  const streamingLinks = buildStreamingLinks(header.title, header.artist);
 
   return (
     <div
@@ -30,9 +32,20 @@ export function Header({ header }: { header: AlbumContextHeader }) {
         <h1 className="mb-3 mt-4 font-serif text-[clamp(42px,5.8vw,78px)] font-bold leading-[0.98] tracking-[-0.035em] text-[#120f18]">
           {header.title}
         </h1>
-        {header.hook && (
-          <div className="line-clamp-2 font-serif text-xl font-medium italic text-[#d1145a]">{header.hook}</div>
-        )}
+
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {streamingLinks.map((link) => (
+            <a
+              key={link.label}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[10px] tracking-[0.2em] text-[#6b6577] transition-colors hover:text-[#d1145a]"
+            >
+              {link.label.toUpperCase()} ↗
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );

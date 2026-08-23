@@ -2,12 +2,10 @@ import type { NarrativeStatement } from "@/app/lib/ai/narrative";
 import { SectionCard } from "@/components/SectionCard";
 
 export function CategoryCardGrid({
-  number,
   title,
   statements,
   labels
 }: {
-  number?: string;
   title: string;
   statements: NarrativeStatement[];
   labels: string[];
@@ -22,7 +20,7 @@ export function CategoryCardGrid({
   }));
 
   return (
-    <SectionCard number={number} title={title}>
+    <SectionCard title={title}>
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map(({ label, statement }) => (
           <div

@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveSearchCandidate, searchCatalog } from "./search";
 import * as albumDb from "../lib/db/album";
 import * as searchFallback from "../lib/ingestion/search-fallback";
 import { CatalogProvider } from "../lib/providers/catalog-provider";
+import { MusicBrainzProvider } from "../lib/providers/musicbrainz-provider";
 
 vi.mock("server-only", () => ({}));
 
@@ -13,6 +14,11 @@ vi.mock("../lib/supabase/server.js", () => ({
 vi.mock("../lib/supabase/admin.js", () => ({
   createSupabaseAdminClient: vi.fn().mockReturnValue({})
 }));
+
+beforeEach(() => {
+  vi.spyOn(MusicBrainzProvider.prototype, "fetchOriginalReleaseDate").mockResolvedValue(null);
+  vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([]);
+});
 
 function rawCandidate(overrides: Record<string, unknown> = {}) {
   return {
@@ -110,7 +116,22 @@ describe("searchCatalog", () => {
     expect(lastRepo.createArtist).not.toHaveBeenCalled();
   });
 
-  it("does not call the external provider when the local catalog already has matches", async () => {
+  it("shows MusicBrainz's earlier original date in the candidate preview, before the album is ever added", async () => {
+    vi.spyOn(albumDb, "createAlbumRepository").mockReturnValue({
+      searchAlbums: vi.fn().mockResolvedValue([]),
+      searchArtists: vi.fn().mockResolvedValue([])
+    } as never);
+    vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([
+      rawCandidate({ title: "Pornography (Deluxe Edition)", artistName: "The Cure", releaseDate: "2005-06-07" })
+    ] as never);
+    vi.spyOn(MusicBrainzProvider.prototype, "fetchOriginalReleaseDate").mockResolvedValue("1982-05-03");
+
+    const results = await searchCatalog("Pornography The Cure");
+
+    expect(results).toEqual([expect.objectContaining({ kind: "candidate", releaseDate: "1982-05-03" })]);
+  });
+
+  it("also fetches external candidates when the local catalog already has matches, merging them in", async () => {
     vi.spyOn(albumDb, "createAlbumRepository").mockReturnValue({
       searchAlbums: vi.fn().mockResolvedValue([
         { id: "album-1", title: "Control", artist_id: "artist-1", release_date: "1986-02-04" }
@@ -118,11 +139,33 @@ describe("searchCatalog", () => {
       searchArtists: vi.fn().mockResolvedValue([]),
       findArtistById: vi.fn().mockResolvedValue({ id: "artist-1", name: "Janet Jackson", slug: "janet-jackson" })
     } as never);
-    const providerSpy = vi.spyOn(CatalogProvider.prototype, "searchByText");
+    vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([
+      rawCandidate({ externalId: "cat-10", title: "Rhythm Nation 1814" })
+    ] as never);
 
-    await searchCatalog("Control");
+    const results = await searchCatalog("Control");
 
-    expect(providerSpy).not.toHaveBeenCalled();
+    expect(results).toEqual([
+      expect.objectContaining({ kind: "known", id: "album-1", title: "Control" }),
+      expect.objectContaining({ kind: "candidate", externalId: "cat-10", title: "Rhythm Nation 1814" })
+    ]);
+  });
+
+  it("filters out external candidates that duplicate an album already known locally", async () => {
+    vi.spyOn(albumDb, "createAlbumRepository").mockReturnValue({
+      searchAlbums: vi.fn().mockResolvedValue([
+        { id: "album-1", title: "Control", artist_id: "artist-1", release_date: "1986-02-04" }
+      ]),
+      searchArtists: vi.fn().mockResolvedValue([]),
+      findArtistById: vi.fn().mockResolvedValue({ id: "artist-1", name: "Janet Jackson", slug: "janet-jackson" })
+    } as never);
+    vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([
+      rawCandidate({ externalId: "cat-10", title: "Control", artistName: "Janet Jackson" })
+    ] as never);
+
+    const results = await searchCatalog("Control");
+
+    expect(results).toEqual([expect.objectContaining({ kind: "known", id: "album-1", title: "Control" })]);
   });
 
   it("returns an empty array when neither the local catalog nor the provider find anything", async () => {
@@ -182,5 +225,42 @@ describe("resolveSearchCandidate", () => {
     const result = await resolveSearchCandidate("Rhythm Nation", "cat-9");
 
     expect(result.state).toBe("error");
+  });
+
+  it("corrects the catalog's release date to MusicBrainz's earlier original date when they disagree", async () => {
+    vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([
+      rawCandidate({ title: "Fallen", artistName: "Evanescence", releaseDate: "2014-06-24" })
+    ] as never);
+    vi.spyOn(MusicBrainzProvider.prototype, "fetchOriginalReleaseDate").mockResolvedValue("2003-03-04");
+    vi.spyOn(searchFallback, "ingestSingleCandidate").mockResolvedValue({
+      id: "album-new",
+      artist_id: "artist-new",
+      title: "Fallen",
+      slug: "evanescence-fallen",
+      release_date: "2003-03-04"
+    });
+    vi.spyOn(albumDb, "createAlbumRepository").mockReturnValue({} as never);
+
+    await resolveSearchCandidate("Fallen", "cat-9");
+
+    const [passedCandidate] = (searchFallback.ingestSingleCandidate as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(passedCandidate.releaseDate).toBe("2003-03-04");
+  });
+
+  it("keeps the catalog's release date when MusicBrainz has no earlier date to offer", async () => {
+    vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([rawCandidate()] as never);
+    vi.spyOn(searchFallback, "ingestSingleCandidate").mockResolvedValue({
+      id: "album-new",
+      artist_id: "artist-new",
+      title: "Rhythm Nation 1814",
+      slug: "janet-jackson-rhythm-nation-1814",
+      release_date: "1989-09-19"
+    });
+    vi.spyOn(albumDb, "createAlbumRepository").mockReturnValue({} as never);
+
+    await resolveSearchCandidate("Rhythm Nation", "cat-9");
+
+    const [passedCandidate] = (searchFallback.ingestSingleCandidate as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(passedCandidate.releaseDate).toBe("1989-09-19");
   });
 });

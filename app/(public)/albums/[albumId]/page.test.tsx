@@ -7,10 +7,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() })
 }));
 
+const { getUserMock } = vi.hoisted(() => ({
+  getUserMock: vi.fn().mockResolvedValue({ data: { user: null } })
+}));
+vi.mock("../../../lib/supabase/server.js", () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({ auth: { getUser: getUserMock } })
+}));
+
 import AlbumPage from "./page";
 import * as albumContextAction from "../../../actions/album-context";
 
-const readyBody = {
+const readyTechnicalBody = {
   header: { title: "Control", artist: "Janet Jackson", releaseDate: "1986-02-04", trackCount: 9, hook: "Janet toma as rédeas da própria carreira." },
   tracks: [
     { id: "track-1", album_id: "album-1", title: "Control", track_number: 1 },
@@ -20,14 +27,8 @@ const readyBody = {
   otherAlbumsByArtist: [
     { albumId: "album-2", title: "Rhythm Nation 1814", releaseYear: "1989", isCurrent: false, description: null }
   ],
-  artistMoment: [{ text: "Janet estava se reinventando artisticamente.", kind: "interpretation" as const, sourceIds: [] }],
-  worldContext: [{ text: "O desastre do Challenger chocou o mundo.", kind: "fact" as const, sourceIds: ["source-1"] }],
-  musicalScene: [],
   sameEraAlbums: [],
   performance: null,
-  receptionVsLegacy: [],
-  curiosities: [{ id: "c1", album_id: "album-1", summary: "Curiosidade de bastidor.", status: "unconfirmed" as const, source_id: "s1" }],
-  influence: [{ id: "i1", artistName: "Missy Elliott", albumId: "album-2", explanation: "Definiu o new jack swing." }],
   recommendations: [
     {
       id: "r1",
@@ -41,14 +42,53 @@ const readyBody = {
   ]
 };
 
+const readyNarrativeBody = {
+  artistMoment: [{ text: "Janet estava se reinventando artisticamente.", kind: "interpretation" as const, sourceIds: [] }],
+  worldContext: [{ text: "O desastre do Challenger chocou o mundo.", kind: "fact" as const, sourceIds: ["source-1"] }],
+  musicalScene: [],
+  receptionVsLegacy: [],
+  summary: [],
+  curiosities: [{ id: "c1", album_id: "album-1", summary: "Curiosidade de bastidor.", status: "unconfirmed" as const, source_id: "s1" }],
+  influence: [{ id: "i1", artistName: "Missy Elliott", albumId: "album-2", explanation: "Definiu o new jack swing." }],
+  failedFacets: []
+};
+
 describe("AlbumPage", () => {
-  it("renders every mandatory section, including world context and influence", async () => {
-    vi.spyOn(albumContextAction, "getAlbumContext").mockResolvedValue({ state: "ready", body: readyBody });
+  it("does not show the admin delete button for a signed-out visitor", async () => {
+    getUserMock.mockResolvedValue({ data: { user: null } });
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
+
+    const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
+    render(element);
+
+    expect(screen.queryByRole("button", { name: /excluir álbum/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the admin delete button when signed in as the admin", async () => {
+    process.env.ADMIN_EMAIL = "admin@example.com";
+    getUserMock.mockResolvedValue({ data: { user: { email: "admin@example.com" } } });
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
+
+    const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
+    render(element);
+
+    expect(screen.getByRole("button", { name: /excluir álbum/i })).toBeInTheDocument();
+  });
+
+  it("renders every mandatory section, including world context and influence, once narrative is ready", async () => {
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
 
     const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
     render(element);
 
     expect(screen.getByRole("heading", { name: "Control" })).toBeInTheDocument();
+    const hookText = screen.getByText("Janet toma as rédeas da própria carreira.");
+    expect(hookText).toBeInTheDocument();
+    const albumSectionHeading = screen.getByRole("heading", { name: "O álbum" });
+    expect(hookText.compareDocumentPosition(albumSectionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/o desastre do challenger/i)).toBeInTheDocument();
     expect(screen.getByText(/dados de desempenho não disponíveis/i)).toBeInTheDocument();
     expect(screen.getByText("Curiosidade de bastidor.")).toBeInTheDocument();
@@ -59,17 +99,19 @@ describe("AlbumPage", () => {
     expect(screen.getByRole("link", { name: /rhythm nation 1814/i })).toHaveAttribute("href", "/albums/album-2");
   });
 
-  it("shows a preparing message while the context is pending", async () => {
-    vi.spyOn(albumContextAction, "getAlbumContext").mockResolvedValue({ state: "pending" });
+  it("renders the technical sheet immediately with loading placeholders while narrative is not started", async () => {
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "not_started" });
 
     const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
     render(element);
 
-    expect(screen.getByText(/preparando/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Control" })).toBeInTheDocument();
+    expect(screen.getAllByText(/buscando conteúdo/i).length).toBeGreaterThan(0);
   });
 
   it("renders a not-found message for an unknown album", async () => {
-    vi.spyOn(albumContextAction, "getAlbumContext").mockResolvedValue({ state: "not_found" });
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "not_found" });
 
     const element = await AlbumPage({ params: Promise.resolve({ albumId: "unknown" }), searchParams: Promise.resolve({}) });
     render(element);
@@ -77,8 +119,18 @@ describe("AlbumPage", () => {
     expect(screen.getByText(/não encontrado/i)).toBeInTheDocument();
   });
 
+  it("renders an error message when the technical sheet fails to load", async () => {
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "error", message: "boom" });
+
+    const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
+    render(element);
+
+    expect(screen.getByText(/não foi possível carregar/i)).toBeInTheDocument();
+  });
+
   it("highlights the track identified by the ?track= search param", async () => {
-    vi.spyOn(albumContextAction, "getAlbumContext").mockResolvedValue({ state: "ready", body: readyBody });
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
 
     const element = await AlbumPage({
       params: Promise.resolve({ albumId: "album-1" }),

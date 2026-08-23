@@ -2,11 +2,9 @@ import type { NarrativeStatement } from "@/app/lib/ai/narrative";
 import { SectionCard } from "@/components/SectionCard";
 
 export function ReceptionSplit({
-  number,
   title,
   statements
 }: {
-  number?: string;
   title: string;
   statements: NarrativeStatement[];
 }) {
@@ -17,7 +15,7 @@ export function ReceptionSplit({
   const [atLaunch, today] = statements;
 
   return (
-    <SectionCard number={number} title={title}>
+    <SectionCard title={title}>
       <div className={`grid gap-4 ${today ? "md:grid-cols-2" : ""}`}>
         <div
           className="rounded-xl border border-white/90 bg-white/50 p-5 backdrop-blur-xl"

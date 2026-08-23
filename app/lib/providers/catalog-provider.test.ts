@@ -6,72 +6,73 @@ function jsonResponse(body: unknown): Response {
 }
 
 describe("CatalogProvider", () => {
-  const config = { clientId: "client-id", clientSecret: "client-secret" };
-
-  it("authenticates via client-credentials flow before searching", async () => {
+  it("searches by artist and album title, enriching results with release date and label", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
       .mockResolvedValueOnce(
         jsonResponse({
-          albums: {
-            items: [
-              {
-                id: "catalog-album-1",
-                name: "Control",
-                release_date: "1986-02-04",
-                images: [{ url: "https://example.com/cover.jpg" }],
-                artists: [{ name: "Janet Jackson" }],
-                total_tracks: 9
-              }
-            ]
-          }
+          data: [
+            {
+              id: 14344576,
+              title: "Follow The Leader",
+              artist: { id: 1327, name: "KoЯn" },
+              cover_medium: "https://example.com/cover.jpg",
+              nb_tracks: 14
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          release_date: "1998-08-18",
+          nb_tracks: 14,
+          label: "Immortal/Epic",
+          genres: { data: [{ name: "Metal" }] }
         })
       );
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
-    const results = await provider.searchAlbum({ artistName: "Janet Jackson", albumTitle: "Control" });
+    const results = await provider.searchAlbum({ artistName: "Korn", albumTitle: "Follow The Leader" });
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, "https://accounts.spotify.com/api/token", expect.anything());
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, expect.stringContaining("api.spotify.com/v1/search"), expect.anything());
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.stringContaining("api.deezer.com/search/album"));
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://api.deezer.com/album/14344576");
     expect(results).toEqual([
       expect.objectContaining({
-        title: "Control",
-        externalId: "catalog-album-1",
-        artistName: "Janet Jackson",
-        releaseDate: "1986-02-04",
-        trackCount: 9,
+        title: "Follow The Leader",
+        externalId: "14344576",
+        artistName: "KoЯn",
+        releaseDate: "1998-08-18",
+        genre: "Metal",
+        label: "Immortal/Epic",
+        trackCount: 14,
         coverArtUrl: "https://example.com/cover.jpg",
         source: expect.objectContaining({ providerName: "catalog" })
       })
     ]);
   });
 
-  it("reuses a cached access token across multiple calls within its expiry window", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ albums: { items: [] } }))
-      .mockResolvedValueOnce(jsonResponse({ albums: { items: [] } }));
-
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    await provider.searchAlbum({ artistName: "Janet Jackson", albumTitle: "Control" });
-    await provider.searchAlbum({ artistName: "Janet Jackson", albumTitle: "Rhythm Nation" });
-
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-  });
-
   it("returns an empty array when no albums match", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ albums: { items: [] } }));
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     const results = await provider.searchAlbum({ artistName: "Unknown Artist", albumTitle: "Nothing" });
+
+    expect(results).toEqual([]);
+  });
+
+  it("drops a candidate whose album details request fails instead of returning a partial/broken entry", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ data: [{ id: 1, title: "Broken", artist: { id: 1, name: "X" } }] })
+      )
+      .mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchAlbum({ artistName: "X", albumTitle: "Broken" });
 
     expect(results).toEqual([]);
   });
@@ -79,221 +80,174 @@ describe("CatalogProvider", () => {
   it("searches by free text without requiring a separate artist/album breakdown", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
       .mockResolvedValueOnce(
         jsonResponse({
-          albums: {
-            items: [
-              {
-                id: "catalog-album-2",
-                name: "Rhythm Nation 1814",
-                release_date: "1989-09-19",
-                images: [{ url: "https://example.com/rn1814.jpg" }],
-                artists: [{ name: "Janet Jackson" }],
-                total_tracks: 20
-              }
-            ]
-          }
+          data: [{ id: 987, title: "Rhythm Nation 1814", artist: { id: 1, name: "Janet Jackson" } }]
         })
-      );
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "1989-09-19", nb_tracks: 20 }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     const results = await provider.searchByText("Janet Jackson Rhythm Nation");
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, expect.stringContaining("api.spotify.com/v1/search"), expect.anything());
-    expect(fetchImpl.mock.calls[1][0]).not.toContain("album:");
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.stringContaining("q=Janet%20Jackson%20Rhythm%20Nation"));
     expect(results).toEqual([
-      expect.objectContaining({
-        title: "Rhythm Nation 1814",
-        externalId: "catalog-album-2",
-        artistName: "Janet Jackson"
-      })
+      expect.objectContaining({ title: "Rhythm Nation 1814", externalId: "987", artistName: "Janet Jackson" })
     ]);
   });
 
-  it("returns an empty array when a free-text search matches nothing", async () => {
+  it("keeps only the original release when reissues/deluxe editions duplicate a search result", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ albums: { items: [] } }));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            { id: 1, title: "Nevermind (Deluxe Edition)", artist: { id: 1, name: "Nirvana" } },
+            { id: 2, title: "Nevermind", artist: { id: 1, name: "Nirvana" } },
+            { id: 3, title: "Nevermind (Remastered)", artist: { id: 1, name: "Nirvana" } }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2011-09-20", nb_tracks: 25 }))
+      .mockResolvedValueOnce(jsonResponse({ release_date: "1991-09-24", nb_tracks: 13 }))
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2011-09-20", nb_tracks: 13 }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchByText("Nirvana Nevermind");
+
+    expect(results).toEqual([
+      expect.objectContaining({ title: "Nevermind", externalId: "2", releaseDate: "1991-09-24" })
+    ]);
+  });
+
+  it("strips a reissue/edition suffix from the title even when it is the only match available", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [{ id: 1, title: "Pornography (Deluxe Edition)", artist: { id: 1, name: "The Cure" } }]
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2005-06-07", nb_tracks: 22 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchByText("The Cure Pornography");
+
+    expect(results).toEqual([expect.objectContaining({ title: "Pornography", externalId: "1" })]);
+  });
+
+  it("returns an empty array when a free-text search matches nothing", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     const results = await provider.searchByText("asdkjhaskjdh nonsense");
 
     expect(results).toEqual([]);
   });
 
+  it("returns an empty array instead of throwing when the search request fails", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("Bad Gateway", { status: 502 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    expect(await provider.searchByText("anything")).toEqual([]);
+  });
+
   it("fetches the tracklist for an already-matched album id", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            { name: "Papa Don't Preach", track_number: 1, duration_ms: 268000 },
-            { name: "Open Your Heart", track_number: 2, duration_ms: 253000 }
-          ]
-        })
-      );
-
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    const results = await provider.fetchTracks("catalog-album-1");
-
-    expect(fetchImpl).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("api.spotify.com/v1/albums/catalog-album-1/tracks"),
-      expect.anything()
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        data: [
+          { title: "It's On!", track_position: 1, duration: 268 },
+          { title: "Freak On a Leash", track_position: 2, duration: 255 }
+        ]
+      })
     );
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.fetchTracks("14344576");
+
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/album/14344576/tracks"));
     expect(results).toEqual([
-      expect.objectContaining({ title: "Papa Don't Preach", position: "1", durationSeconds: 268 }),
-      expect.objectContaining({ title: "Open Your Heart", position: "2", durationSeconds: 253 })
+      expect.objectContaining({ title: "It's On!", position: "1", durationSeconds: 268 }),
+      expect.objectContaining({ title: "Freak On a Leash", position: "2", durationSeconds: 255 })
     ]);
   });
 
-  it("returns an empty array when the album has no tracks", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ items: [] }));
+  it("returns an empty array when the tracks request fails", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
-    const results = await provider.fetchTracks("catalog-album-1");
-
-    expect(results).toEqual([]);
+    expect(await provider.fetchTracks("missing-album")).toEqual([]);
   });
 
-  it("resolves an artist's Spotify id from a name search", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ artists: { items: [{ id: "artist-1" }] } }));
-
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    const artistId = await provider.searchArtist("Madonna");
-
-    expect(fetchImpl).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("api.spotify.com/v1/search?type=artist&q=Madonna"),
-      expect.anything()
+  it("resolves an artist id, preferring the candidate with the most fans over the first match", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        data: [
+          { id: 267400112, nb_fan: 6717 },
+          { id: 1327, nb_fan: 2616970 },
+          { id: 16648, nb_fan: 8345 }
+        ]
+      })
     );
-    expect(artistId).toBe("artist-1");
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const artistId = await provider.searchArtist("Korn");
+
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/search/artist"));
+    expect(artistId).toBe("1327");
   });
 
   it("returns null when no artist matches the name search", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(jsonResponse({ artists: { items: [] } }));
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     expect(await provider.searchArtist("Some Obscure Act")).toBeNull();
   });
 
   it("returns null instead of throwing when the artist search request fails", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(new Response("Forbidden", { status: 403 }));
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("Forbidden", { status: 403 }));
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     expect(await provider.searchArtist("Madonna")).toBeNull();
   });
 
-  it("fetches an artist's full discography, following pagination until next is null", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            { id: "album-1", name: "Like a Virgin", release_date: "1984-11-12", images: [], artists: [{ name: "Madonna" }] }
-          ],
-          next: "https://api.spotify.com/v1/artists/artist-1/albums?offset=50&limit=50"
-        })
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            { id: "album-2", name: "True Blue", release_date: "1986-06-30", images: [], artists: [{ name: "Madonna" }] }
-          ],
-          next: null
-        })
-      );
+  it("fetches an artist's full discography, excluding singles", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        data: [
+          { id: 1, title: "Like a Virgin", release_date: "1984-11-12", record_type: "album", artist: { id: 1, name: "Madonna" } },
+          { id: 2, title: "A Single", release_date: "1985-01-01", record_type: "single", artist: { id: 1, name: "Madonna" } },
+          { id: 3, title: "True Blue", release_date: "1986-06-30", record_type: "album", artist: { id: 1, name: "Madonna" } }
+        ]
+      })
+    );
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
     const albums = await provider.fetchArtistAlbums("artist-1");
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(fetchImpl).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining("api.spotify.com/v1/artists/artist-1/albums?include_groups=album,compilation"),
-      expect.anything()
-    );
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/artist/artist-1/albums"));
     expect(albums).toEqual([
-      expect.objectContaining({ title: "Like a Virgin", externalId: "album-1", releaseDate: "1984-11-12" }),
-      expect.objectContaining({ title: "True Blue", externalId: "album-2", releaseDate: "1986-06-30" })
+      expect.objectContaining({ title: "Like a Virgin", externalId: "1", releaseDate: "1984-11-12" }),
+      expect.objectContaining({ title: "True Blue", externalId: "3", releaseDate: "1986-06-30" })
     ]);
   });
 
-  it("stops following pagination after a bounded number of pages", async () => {
-    const page = (id: string) =>
-      jsonResponse({
-        items: [{ id, name: id, release_date: "2000-01-01", images: [], artists: [{ name: "Prolific Artist" }] }],
-        next: "https://api.spotify.com/v1/artists/artist-1/albums?offset=next"
-      });
+  it("returns null instead of an empty list when the discography request fails", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("Too Many Requests", { status: 429 }));
 
-    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }));
-    for (let i = 0; i < 20; i++) {
-      fetchImpl.mockResolvedValueOnce(page(`a${i}`));
-    }
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
 
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    const albums = await provider.fetchArtistAlbums("artist-1");
-
-    expect(albums).toHaveLength(15);
-    expect(fetchImpl).toHaveBeenCalledTimes(16);
-  });
-
-  it("returns null instead of an empty list when the very first page request fails", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(new Response("Too Many Requests", { status: 429 }));
-
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    const albums = await provider.fetchArtistAlbums("artist-1");
-
-    expect(albums).toBeNull();
-  });
-
-  it("returns the albums collected so far when a later page request fails", async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ access_token: "token-abc", expires_in: 3600 }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            { id: "album-1", name: "Like a Virgin", release_date: "1984-11-12", images: [], artists: [{ name: "Madonna" }] }
-          ],
-          next: "https://api.spotify.com/v1/artists/artist-1/albums?offset=50&limit=50"
-        })
-      )
-      .mockResolvedValueOnce(new Response("Too Many Requests", { status: 429 }));
-
-    const provider = new CatalogProvider(config, fetchImpl as unknown as typeof fetch);
-
-    const albums = await provider.fetchArtistAlbums("artist-1");
-
-    expect(albums).toEqual([expect.objectContaining({ title: "Like a Virgin", externalId: "album-1" })]);
+    expect(await provider.fetchArtistAlbums("artist-1")).toBeNull();
   });
 });

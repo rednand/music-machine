@@ -9,14 +9,15 @@ export interface GroqLikeClient {
         model: string;
         messages: Array<{ role: "user"; content: string }>;
         max_completion_tokens?: number;
+        response_format?: { type: "json_object" };
+        reasoning_effort?: "low" | "medium" | "high";
       }): Promise<{ choices: Array<{ message: { content: string | null } }> }>;
     };
   };
 }
 
 export interface GroqClientConfig {
-  primaryModel: string;
-  fallbackModel: string;
+  models: string[];
 }
 
 export class GroqEmptyResponseError extends Error {
@@ -35,7 +36,9 @@ export class GroqClient implements ChatCompletionClient {
     const response = await this.groq.chat.completions.create({
       model,
       messages: [{ role: "user", content: prompt }],
-      max_completion_tokens: 4096
+      max_completion_tokens: 2048,
+      response_format: { type: "json_object" },
+      ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" as const } : {})
     });
 
     const content = response.choices[0]?.message.content;
@@ -46,10 +49,15 @@ export class GroqClient implements ChatCompletionClient {
   }
 
   async complete(prompt: string): Promise<string> {
-    try {
-      return await this.completeWithModel(this.config.primaryModel, prompt);
-    } catch {
-      return await this.completeWithModel(this.config.fallbackModel, prompt);
+    let lastError: unknown;
+    for (const model of this.config.models) {
+      try {
+        return await this.completeWithModel(model, prompt);
+      } catch (error) {
+        console.error(`Groq model ${model} failed, trying next`, error);
+        lastError = error;
+      }
     }
+    throw lastError;
   }
 }

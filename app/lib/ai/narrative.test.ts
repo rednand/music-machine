@@ -143,21 +143,55 @@ describe("synthesizeNarrative", () => {
     expect(worldContextPrompt).toMatch(/tecnologia/i);
   });
 
-  it("instructs world_context and reception_vs_legacy to return a fixed number of standalone statements, not connected prose", async () => {
+  it("instructs world_context to return a fixed number of standalone statements, not connected prose", async () => {
     const gptClient = { complete: vi.fn().mockResolvedValue(fakeGptResponseWithFacet("world_context")) };
 
     await synthesizeNarrative(baseInput, gptClient);
 
     const worldContextPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: world_context"))?.[0];
-    const receptionPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: reception_vs_legacy"))?.[0];
     const artistMomentPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("Seção: artist_moment"))?.[0];
 
     expect(worldContextPrompt).toMatch(/exatamente 3 statements/i);
     expect(worldContextPrompt).toMatch(/bloco independente e autocontido/i);
-    expect(receptionPrompt).toMatch(/exatamente 2 statements/i);
-    expect(receptionPrompt).toMatch(/no lançamento/i);
-    expect(receptionPrompt).toMatch(/bloco independente e autocontido/i);
     expect(artistMomentPrompt).toMatch(/texto corrido e conectado/i);
+  });
+
+  it("asks the AI two separate, narrowly-scoped questions for reception_vs_legacy so it can't conflate the two periods in one answer", async () => {
+    const gptClient = { complete: vi.fn().mockResolvedValue(fakeGptResponseWithFacet("reception_vs_legacy")) };
+
+    await synthesizeNarrative(baseInput, gptClient, ["reception_vs_legacy"]);
+
+    expect(gptClient.complete).toHaveBeenCalledTimes(2);
+    const launchPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("(no lançamento)"))?.[0];
+    const todayPrompt = gptClient.complete.mock.calls.find((call) => call[0].includes("(hoje)"))?.[0];
+
+    expect(launchPrompt).toMatch(/momento do lançamento/i);
+    expect(launchPrompt).not.toMatch(/percepção e reavaliação atuais/i);
+    expect(todayPrompt).toMatch(/avaliado.*—.*percepção e reavaliação atuais/i);
+    expect(todayPrompt).not.toMatch(/momento do lançamento/i);
+  });
+
+  it("keeps reception_vs_legacy's launch and today statements in the right slots, each answered independently", async () => {
+    const gptClient = {
+      complete: vi.fn().mockImplementation((prompt: string) =>
+        Promise.resolve(
+          JSON.stringify({
+            statements: [
+              {
+                text: prompt.includes("(no lançamento)") ? "No lançamento, a crítica foi mista." : "Hoje, o álbum é visto como um clássico.",
+                kind: "fact",
+                sourceIds: ["source-1"]
+              }
+            ]
+          })
+        )
+      )
+    };
+
+    const result = await synthesizeNarrative(baseInput, gptClient, ["reception_vs_legacy"]);
+
+    expect(result.facets.reception_vs_legacy.statements[0].text).toBe("No lançamento, a crítica foi mista.");
+    expect(result.facets.reception_vs_legacy.statements[1].text).toBe("Hoje, o álbum é visto como um clássico.");
   });
 
   it("only generates the requested subset of facets, leaving the rest absent", async () => {

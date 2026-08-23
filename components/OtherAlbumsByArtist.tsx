@@ -11,8 +11,8 @@ function EntryBody({ album, resolving }: { album: OtherAlbumEntry; resolving: bo
     <>
       <span
         aria-hidden="true"
-        className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full border-2 bg-[#f7f4f1] group-hover:bg-[#d1145a] ${
-          album.isCurrent ? "border-[#d1145a] bg-[#d1145a]" : "border-[#d1145a]"
+        className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#d1145a] group-hover:bg-[#d1145a] ${
+          album.isCurrent ? "bg-[#d1145a]" : "bg-[#f7f4f1]"
         }`}
       />
       <span className="font-mono text-[10px] tracking-[0.22em] text-[#0d7a5c]">{album.releaseYear}</span>

@@ -54,6 +54,24 @@ describe("OtherAlbumsByArtist", () => {
     expect(screen.getByText("Like a Prayer")).not.toHaveClass("text-[#d1145a]");
   });
 
+  it("fills in the timeline dot for the current album, leaving other dots hollow", () => {
+    const { container } = render(
+      <OtherAlbumsByArtist
+        albums={[
+          { albumId: "album-2", title: "True Blue", releaseYear: "1986", isCurrent: true, description: null },
+          { albumId: "album-3", title: "Like a Prayer", releaseYear: "1989", isCurrent: false, description: null }
+        ]}
+      />
+    );
+
+    const dots = container.querySelectorAll('span[aria-hidden="true"]');
+    expect(dots).toHaveLength(2);
+    expect(dots[0]).toHaveClass("bg-[#d1145a]");
+    expect(dots[0]).not.toHaveClass("bg-[#f7f4f1]");
+    expect(dots[1]).toHaveClass("bg-[#f7f4f1]");
+    expect(dots[1]).not.toHaveClass("bg-[#d1145a]");
+  });
+
   it("renders the current album as non-interactive, without a link or button", () => {
     render(
       <OtherAlbumsByArtist

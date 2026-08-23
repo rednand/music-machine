@@ -3,11 +3,9 @@ import type { SameEraAlbumRef } from "@/app/lib/ai/narrative";
 import { SectionCard } from "@/components/SectionCard";
 
 export function MusicalSceneGrid({
-  number,
   title,
   albums
 }: {
-  number?: string;
   title: string;
   albums: SameEraAlbumRef[];
 }) {
@@ -18,7 +16,7 @@ export function MusicalSceneGrid({
   const cards = albums.slice(0, 3);
 
   return (
-    <SectionCard number={number} title={title}>
+    <SectionCard title={title}>
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map((album, index) => {
           const cardBody = (

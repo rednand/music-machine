@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { getDiscoveryPage } from "@/app/actions/discovery";
+import { shuffleEntries } from "@/app/lib/discovery/collection";
+import { getCurrentIsAdmin } from "@/app/lib/auth";
 import { SearchForm } from "@/components/SearchForm";
 import { FeaturedAlbumCard, MAX_FEATURED_CARDS } from "@/components/FeaturedAlbumCard";
 import { CollectionList } from "@/components/CollectionList";
 
 export default async function DiscoverPage() {
   const result = await getDiscoveryPage();
+  const isAdmin = await getCurrentIsAdmin();
 
-  const covers = result.state === "ready" ? result.collection.slice(0, MAX_FEATURED_CARDS) : [];
+  const covers = result.state === "ready" ? shuffleEntries(result.collection, MAX_FEATURED_CARDS) : [];
   const ticker = covers.slice(0, 3);
+  const collection = result.state === "ready" ? shuffleEntries(result.collection) : [];
 
   return (
     <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:pl-0 md:pr-[clamp(24px,4vw,72px)]">
@@ -25,7 +29,7 @@ export default async function DiscoverPage() {
           </p>
 
           <div className="mt-12">
-            <SearchForm />
+            <SearchForm isAdmin={isAdmin} />
           </div>
 
           {result.state === "empty" && (
@@ -69,7 +73,7 @@ export default async function DiscoverPage() {
             <span className="font-mono text-[10px] tracking-[0.26em] text-[#a8a2b0]">ROLE E ESCOLHA</span>
           </div>
           <div className="mt-9">
-            <CollectionList entries={result.collection} />
+            <CollectionList entries={collection} />
           </div>
         </>
       )}

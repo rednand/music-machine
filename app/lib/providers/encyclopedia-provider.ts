@@ -21,8 +21,17 @@ interface RevisionsResponse {
   };
 }
 
-const CHART_TEMPLATE_PATTERN = /\{\{Album chart\|title=([^|]+)\|position=(\d+)\}\}/gi;
-const CERTIFICATION_TEMPLATE_PATTERN = /\{\{Certification\|region=([^|]+)\|certification=([^}]+)\}\}/gi;
+interface SearchResponse {
+  query: { search: Array<{ title: string }> };
+}
+
+const CHART_TEMPLATE_PATTERN = /\{\{album chart\|([^|}]+)\|(\d+)/gi;
+const CERTIFICATION_TEMPLATE_PATTERN = /\{\{certification table entry\|([^}]*)\}\}/gi;
+
+function extractTemplateField(block: string, field: string): string | null {
+  const match = block.match(new RegExp(`(?:^|\\|)\\s*${field}\\s*=\\s*([^|}]+)`, "i"));
+  return match ? match[1].trim() : null;
+}
 
 export function parsePerformanceTemplates(wikitext: string): RawPerformanceRecordData[] {
   const retrievedAt = new Date().toISOString();
@@ -37,14 +46,21 @@ export function parsePerformanceTemplates(wikitext: string): RawPerformanceRecor
     })
   );
 
-  const certificationRecords = [...wikitext.matchAll(CERTIFICATION_TEMPLATE_PATTERN)].map(
-    (match): RawPerformanceRecordData => ({
-      kind: "certification",
-      label: match[1].trim(),
-      value: match[2].trim(),
-      source
+  const certificationRecords = [...wikitext.matchAll(CERTIFICATION_TEMPLATE_PATTERN)]
+    .map((match) => {
+      const region = extractTemplateField(match[1], "region");
+      const award = extractTemplateField(match[1], "award");
+      return region && award ? { region, award } : null;
     })
-  );
+    .filter((entry): entry is { region: string; award: string } => entry !== null)
+    .map(
+      ({ region, award }): RawPerformanceRecordData => ({
+        kind: "certification",
+        label: region,
+        value: award,
+        source
+      })
+    );
 
   return [...chartRecords, ...certificationRecords];
 }
@@ -87,12 +103,34 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
     private readonly fetchImpl: typeof fetch = fetch
   ) {}
 
-  private pageTitle(query: AlbumLookupQuery): string {
-    return `${query.albumTitle} (${query.artistName} album)`;
+  private async resolveAlbumPageTitle(query: AlbumLookupQuery): Promise<string | null> {
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`${query.albumTitle} ${query.artistName} album`)}&format=json&srlimit=5`;
+
+    try {
+      const response = await this.fetchImpl(searchUrl, { headers: { "User-Agent": this.config.userAgent } });
+      if (!response.ok) {
+        return null;
+      }
+      const data = (await response.json()) as SearchResponse;
+      const results = data.query.search;
+      if (results.length === 0) {
+        return null;
+      }
+
+      const normalizedAlbumTitle = query.albumTitle.toLowerCase();
+      const bestMatch = results.find((result) => result.title.toLowerCase().includes(normalizedAlbumTitle));
+      return (bestMatch ?? results[0]).title;
+    } catch {
+      return null;
+    }
   }
 
   async fetchContextFacts(query: AlbumLookupQuery): Promise<RawContextFactData[]> {
-    const title = encodeURIComponent(this.pageTitle(query));
+    const resolvedTitle = await this.resolveAlbumPageTitle(query);
+    if (!resolvedTitle) {
+      return [];
+    }
+    const title = encodeURIComponent(resolvedTitle);
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${title}`;
 
     try {
@@ -122,7 +160,11 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
   }
 
   async fetchPerformanceRecords(query: AlbumLookupQuery): Promise<RawPerformanceRecordData[]> {
-    const title = encodeURIComponent(this.pageTitle(query));
+    const resolvedTitle = await this.resolveAlbumPageTitle(query);
+    if (!resolvedTitle) {
+      return [];
+    }
+    const title = encodeURIComponent(resolvedTitle);
     const url = `https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&rvslots=main&format=json&titles=${title}`;
 
     try {

@@ -42,3 +42,12 @@ export async function buildDiscoveryPage(deps: CollectionDeps): Promise<Discover
 
   return { state: "ready", featured: collection[0], collection };
 }
+
+export function shuffleEntries(collection: DiscoveryPageEntry[], count: number = collection.length): DiscoveryPageEntry[] {
+  const shuffled = [...collection];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, count);
+}

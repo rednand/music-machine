@@ -81,6 +81,15 @@ export function createAlbumRepository(supabase: SupabaseLike) {
       return data ?? [];
     },
 
+    async findAlbumsByReleaseYear(year: string): Promise<AlbumRow[]> {
+      const { data } = await supabase
+        .from<AlbumRow>("albums")
+        .select("*")
+        .ilike("release_date", `${year}%`)
+        .order("release_date", { ascending: true });
+      return data ?? [];
+    },
+
     async createTrack(input: Omit<TrackRow, "id">): Promise<TrackRow> {
       const { data, error } = await supabase.from<TrackRow>("tracks").insert(input).select().single();
       if (data) {

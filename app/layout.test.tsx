@@ -7,6 +7,12 @@ vi.mock("next/font/google", () => ({
   Work_Sans: () => ({ variable: "--font-sans" })
 }));
 
+vi.mock("./lib/supabase/server.js", () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) }
+  })
+}));
+
 describe("RootLayout", () => {
   it("declares pt-BR metadata for the product", async () => {
     const { metadata } = await import("./layout.js");
@@ -17,7 +23,7 @@ describe("RootLayout", () => {
 
   it("renders the AppShell around its children", async () => {
     const RootLayout = (await import("./layout.js")).default;
-    const element = RootLayout({ children: <p>conteúdo</p> });
+    const element = await RootLayout({ children: <p>conteúdo</p> });
 
     const htmlProps = element.props;
     expect(htmlProps.lang).toBe("pt-BR");

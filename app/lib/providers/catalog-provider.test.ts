@@ -97,6 +97,48 @@ describe("CatalogProvider", () => {
     ]);
   });
 
+  it("keeps only the original release when reissues/deluxe editions duplicate a search result", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            { id: 1, title: "Nevermind (Deluxe Edition)", artist: { id: 1, name: "Nirvana" } },
+            { id: 2, title: "Nevermind", artist: { id: 1, name: "Nirvana" } },
+            { id: 3, title: "Nevermind (Remastered)", artist: { id: 1, name: "Nirvana" } }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2011-09-20", nb_tracks: 25 }))
+      .mockResolvedValueOnce(jsonResponse({ release_date: "1991-09-24", nb_tracks: 13 }))
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2011-09-20", nb_tracks: 13 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchByText("Nirvana Nevermind");
+
+    expect(results).toEqual([
+      expect.objectContaining({ title: "Nevermind", externalId: "2", releaseDate: "1991-09-24" })
+    ]);
+  });
+
+  it("strips a reissue/edition suffix from the title even when it is the only match available", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [{ id: 1, title: "Pornography (Deluxe Edition)", artist: { id: 1, name: "The Cure" } }]
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "2005-06-07", nb_tracks: 22 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchByText("The Cure Pornography");
+
+    expect(results).toEqual([expect.objectContaining({ title: "Pornography", externalId: "1" })]);
+  });
+
   it("returns an empty array when a free-text search matches nothing", async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] }));
 

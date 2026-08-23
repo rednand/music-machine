@@ -1,6 +1,12 @@
 import type { SupabaseLike } from "./supabase-like";
 import { isSameEra } from "../same-era";
 
+const UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === UNIQUE_VIOLATION;
+}
+
 export type RecommendationReason =
   | "same_era"
   | "same_genre_movement"
@@ -20,8 +26,22 @@ export type CreateRecommendationInput = Omit<RecommendationRow, "id">;
 export function createRecommendationRepository(supabase: SupabaseLike) {
   return {
     async create(input: CreateRecommendationInput): Promise<RecommendationRow> {
-      const { data } = await supabase.from<RecommendationRow>("recommendations").insert(input).select().single();
-      return data as RecommendationRow;
+      const { data, error } = await supabase.from<RecommendationRow>("recommendations").insert(input).select().single();
+      if (data) {
+        return data;
+      }
+      if (isUniqueViolation(error)) {
+        const existing = await supabase
+          .from<RecommendationRow>("recommendations")
+          .select("*")
+          .eq("subject_album_id", input.subject_album_id)
+          .eq("recommended_album_id", input.recommended_album_id)
+          .maybeSingle();
+        if (existing.data) {
+          return existing.data;
+        }
+      }
+      throw new Error(`Failed to create recommendation: ${error ? JSON.stringify(error) : "no row returned"}`);
     },
 
     async findBySubjectAlbumId(albumId: string): Promise<RecommendationRow[]> {
@@ -75,15 +95,6 @@ export function deriveRecommendations(
         recommended_album_id: candidate.id,
         reason: "same_era",
         explanation: `Lançado por volta da mesma época de ${subject.title}.`
-      });
-      continue;
-    }
-
-    if (subject.genre && candidate.genre && subject.genre === candidate.genre) {
-      derived.push({
-        recommended_album_id: candidate.id,
-        reason: "same_genre_movement",
-        explanation: `Faz parte do mesmo movimento de ${subject.genre} que ${subject.title}.`
       });
     }
   }

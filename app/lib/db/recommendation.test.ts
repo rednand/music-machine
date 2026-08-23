@@ -25,6 +25,64 @@ describe("RecommendationRepository", () => {
 
     expect(await repo.findBySubjectAlbumId("obscure-album")).toEqual([]);
   });
+
+  it("returns the already-persisted recommendation instead of throwing when a concurrent insert already created it", async () => {
+    const existingRecommendation = {
+      id: "rec-1",
+      subject_album_id: "control",
+      recommended_album_id: "true-blue",
+      reason: "same_era" as const,
+      explanation: "Lançado na mesma época de Control."
+    };
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "23505", message: "duplicate key value" } })
+          })
+        }),
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: existingRecommendation, error: null })
+            })
+          })
+        })
+      })
+    };
+    const repo = createRecommendationRepository(supabase as never);
+
+    const result = await repo.create({
+      subject_album_id: "control",
+      recommended_album_id: "true-blue",
+      reason: "same_era",
+      explanation: "Lançado na mesma época de Control."
+    });
+
+    expect(result).toEqual(existingRecommendation);
+  });
+
+  it("throws instead of silently returning a broken entry when the insert fails for a reason other than a duplicate", async () => {
+    const supabase = {
+      from: () => ({
+        insert: () => ({
+          select: () => ({
+            single: async () => ({ data: null, error: { code: "500", message: "connection reset" } })
+          })
+        })
+      })
+    };
+    const repo = createRecommendationRepository(supabase as never);
+
+    await expect(
+      repo.create({
+        subject_album_id: "control",
+        recommended_album_id: "true-blue",
+        reason: "same_era",
+        explanation: "Lançado na mesma época de Control."
+      })
+    ).rejects.toThrow("Failed to create recommendation");
+  });
 });
 
 describe("deriveRecommendations", () => {
@@ -50,14 +108,12 @@ describe("deriveRecommendations", () => {
     ]);
   });
 
-  it("uses same_genre_movement when genres match but the release is outside the same-era window", () => {
+  it("does not recommend based on matching genre alone when outside the same-era window", () => {
     const laterFunkAlbum = { id: "later-funk", title: "Later Funk", releaseDate: new Date("1995-01-01"), genre: "Funk / Soul" };
 
     const recommendations = deriveRecommendations(control, [laterFunkAlbum], new Set());
 
-    expect(recommendations).toEqual([
-      expect.objectContaining({ recommended_album_id: "later-funk", reason: "same_genre_movement" })
-    ]);
+    expect(recommendations).toEqual([]);
   });
 
   it("excludes the subject album itself and albums with no matching reason", () => {

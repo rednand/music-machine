@@ -132,7 +132,8 @@ export function createNarrativeArticleRepository(supabase: SupabaseLike) {
       const { data: statementRows } = await supabase
         .from<{ id: string; text: string; kind: NarrativeStatement["kind"] }>("narrative_statements")
         .select("*")
-        .eq("narrative_article_id", articleId);
+        .eq("narrative_article_id", articleId)
+        .order("order", { ascending: true });
 
       const rows = statementRows ?? [];
       const statements: NarrativeStatement[] = [];

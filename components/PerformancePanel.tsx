@@ -14,16 +14,19 @@ export function PerformancePanel({ records }: PerformancePanelProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+    <div className="flex gap-3 overflow-x-auto pb-1">
       {records.map((record) => (
         <div
           key={record.id}
-          className="rounded-xl border border-white/90 bg-white/50 p-5 backdrop-blur-xl"
+          className="w-[128px] flex-none rounded-lg border border-white/90 bg-white/50 p-3 backdrop-blur-xl"
           style={{ boxShadow: "0 24px 44px -36px rgba(23,20,32,0.35)" }}
         >
-          <div className="font-mono text-[9.5px] tracking-[0.22em] text-[#a8a2b0]">{record.label}</div>
+          <div title={record.label} className="truncate font-mono text-[8.5px] tracking-[0.2em] text-[#a8a2b0]">
+            {record.label}
+          </div>
           <div
-            className={`mt-2 font-serif text-2xl font-bold ${
+            title={record.value}
+            className={`mt-1 truncate font-serif text-lg font-bold ${
               record.kind === "certification" ? "text-[#d1145a]" : "text-[#120f18]"
             }`}
           >

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildDiscoveryPage } from "./collection";
+import { buildDiscoveryPage, shuffleEntries } from "./collection";
+import type { DiscoveryPageEntry } from "./collection";
 
 function album(overrides: Record<string, unknown> = {}) {
   return {
@@ -93,5 +94,62 @@ describe("buildDiscoveryPage", () => {
     if (result.state === "ready") {
       expect(result.collection[0]).toEqual(expect.objectContaining({ artistName: "", title: "True Blue" }));
     }
+  });
+});
+
+describe("shuffleEntries", () => {
+  function entry(albumId: string): DiscoveryPageEntry {
+    return { albumId, title: albumId, artistName: "Artist", releaseYear: "1999", hook: null };
+  }
+
+  it("returns the requested number of entries, all sourced from the collection", () => {
+    const collection = [entry("a"), entry("b"), entry("c"), entry("d"), entry("e")];
+
+    const result = shuffleEntries(collection, 3);
+
+    expect(result).toHaveLength(3);
+    expect(new Set(result.map((r) => r.albumId)).size).toBe(3);
+    result.forEach((r) => expect(collection).toContainEqual(r));
+  });
+
+  it("does not mutate the original collection", () => {
+    const collection = [entry("a"), entry("b"), entry("c")];
+    const original = [...collection];
+
+    shuffleEntries(collection, 2);
+
+    expect(collection).toEqual(original);
+  });
+
+  it("caps the result at the collection size when count exceeds it", () => {
+    const collection = [entry("a"), entry("b")];
+
+    const result = shuffleEntries(collection, 4);
+
+    expect(result).toHaveLength(2);
+  });
+
+  it("shuffles the whole collection when count is omitted", () => {
+    const collection = [entry("a"), entry("b"), entry("c")];
+
+    const result = shuffleEntries(collection);
+
+    expect(result).toHaveLength(3);
+    expect(new Set(result.map((r) => r.albumId))).toEqual(new Set(["a", "b", "c"]));
+  });
+
+  it("can select different subsets across calls", () => {
+    const collection = Array.from({ length: 20 }, (_, i) => entry(`album-${i}`));
+    const randomSpy = vi.spyOn(Math, "random");
+
+    randomSpy.mockReturnValue(0);
+    const first = shuffleEntries(collection, 4).map((e) => e.albumId);
+
+    randomSpy.mockReturnValue(0.99);
+    const second = shuffleEntries(collection, 4).map((e) => e.albumId);
+
+    expect(first).not.toEqual(second);
+
+    randomSpy.mockRestore();
   });
 });

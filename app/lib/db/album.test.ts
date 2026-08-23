@@ -45,6 +45,28 @@ describe("AlbumRepository", () => {
     expect(await repo.searchAlbums("nothing")).toEqual([]);
   });
 
+  it("finds albums released in a given year, ordered by release date ascending", async () => {
+    const supabase = createFakeSupabase({
+      albums: [
+        { id: "album-1", artist_id: "artist-1", title: "Rhythm Nation 1814", slug: "rn1814", release_date: "1989-09-19" },
+        { id: "album-2", artist_id: "artist-2", title: "Control", slug: "control", release_date: "1986-02-04" },
+        { id: "album-3", artist_id: "artist-3", title: "True Blue", slug: "true-blue", release_date: "1986-06-30" }
+      ]
+    });
+    const repo = createAlbumRepository(supabase as never);
+
+    const albums = await repo.findAlbumsByReleaseYear("1986");
+
+    expect(albums.map((a) => a.title)).toEqual(["Control", "True Blue"]);
+  });
+
+  it("returns an empty array when no album was released in the given year", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createAlbumRepository(supabase as never);
+
+    expect(await repo.findAlbumsByReleaseYear("1901")).toEqual([]);
+  });
+
   it("creates tracks and credits linked to an album", async () => {
     const supabase = createFakeSupabase({});
     const repo = createAlbumRepository(supabase as never);

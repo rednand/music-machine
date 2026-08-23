@@ -43,8 +43,9 @@ describe("ingestAlbum", () => {
         influenced: ["Missy Elliott"]
       })
     };
+    const musicbrainz = { providerName: "musicbrainz", fetchOriginalReleaseDate: vi.fn().mockResolvedValue(null) };
 
-    const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia } as never);
+    const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia, musicbrainz } as never);
 
     expect(result.title).toBe("Control");
     expect(result.artistName).toBe("Janet Jackson");
@@ -77,13 +78,82 @@ describe("ingestAlbum", () => {
       fetchPerformanceRecords: vi.fn().mockResolvedValue([]),
       fetchArtistProfile: vi.fn().mockResolvedValue({ summary: null, influencedBy: [], influenced: [] })
     };
+    const musicbrainz = { providerName: "musicbrainz", fetchOriginalReleaseDate: vi.fn().mockResolvedValue(null) };
 
-    const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia } as never);
+    const result = await ingestAlbum(query, { catalog, discography, popularity, encyclopedia, musicbrainz } as never);
 
     expect(result.title).toBe(query.albumTitle);
     expect(result.credits).toEqual([]);
     expect(result.performanceRecords).toEqual([]);
     expect(result.externalId).toBeUndefined();
     expect(result.artistProfile).toEqual({ summary: null, influencedBy: [], influenced: [] });
+  });
+
+  it("prefers MusicBrainz's original release date when it predates a catalog reissue's date", async () => {
+    const catalog = {
+      providerName: "catalog",
+      searchAlbum: vi.fn().mockResolvedValue([
+        {
+          title: "Fallen",
+          externalId: "cat-1",
+          artistName: "Evanescence",
+          releaseDate: "2014-06-24",
+          source: { providerName: "catalog", url: "https://catalog.example/x", retrievedAt: "now" }
+        }
+      ])
+    };
+    const discography = { providerName: "discography", fetchCredits: vi.fn().mockResolvedValue([]) };
+    const popularity = { providerName: "popularity", fetchTags: vi.fn().mockResolvedValue([]) };
+    const encyclopedia = {
+      providerName: "encyclopedia",
+      fetchContextFacts: vi.fn().mockResolvedValue([]),
+      fetchPerformanceRecords: vi.fn().mockResolvedValue([]),
+      fetchArtistProfile: vi.fn().mockResolvedValue({ summary: null, influencedBy: [], influenced: [] })
+    };
+    const musicbrainz = {
+      providerName: "musicbrainz",
+      fetchOriginalReleaseDate: vi.fn().mockResolvedValue("2003-03-04")
+    };
+
+    const result = await ingestAlbum(
+      { artistName: "Evanescence", albumTitle: "Fallen" },
+      { catalog, discography, popularity, encyclopedia, musicbrainz } as never
+    );
+
+    expect(result.releaseDate.value).toBe("2003-03-04");
+  });
+
+  it("keeps the catalog's release date when MusicBrainz has no earlier date", async () => {
+    const catalog = {
+      providerName: "catalog",
+      searchAlbum: vi.fn().mockResolvedValue([
+        {
+          title: "Control",
+          externalId: "cat-1",
+          artistName: "Janet Jackson",
+          releaseDate: "1986-02-04",
+          source: { providerName: "catalog", url: "https://catalog.example/x", retrievedAt: "now" }
+        }
+      ])
+    };
+    const discography = { providerName: "discography", fetchCredits: vi.fn().mockResolvedValue([]) };
+    const popularity = { providerName: "popularity", fetchTags: vi.fn().mockResolvedValue([]) };
+    const encyclopedia = {
+      providerName: "encyclopedia",
+      fetchContextFacts: vi.fn().mockResolvedValue([]),
+      fetchPerformanceRecords: vi.fn().mockResolvedValue([]),
+      fetchArtistProfile: vi.fn().mockResolvedValue({ summary: null, influencedBy: [], influenced: [] })
+    };
+    const musicbrainz = {
+      providerName: "musicbrainz",
+      fetchOriginalReleaseDate: vi.fn().mockResolvedValue("1986-06-30")
+    };
+
+    const result = await ingestAlbum(
+      query,
+      { catalog, discography, popularity, encyclopedia, musicbrainz } as never
+    );
+
+    expect(result.releaseDate.value).toBe("1986-02-04");
   });
 });

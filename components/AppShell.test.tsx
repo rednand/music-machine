@@ -25,4 +25,26 @@ describe("AppShell", () => {
     expect(screen.queryByRole("link", { name: /linhas/i })).not.toBeInTheDocument();
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });
+
+  it("shows no sign-in link when not an admin, and a sign-out button when signed in as the admin", async () => {
+    const { AppShell } = await import("./AppShell.js");
+
+    const { rerender } = render(
+      <AppShell>
+        <p>conteúdo</p>
+      </AppShell>
+    );
+
+    expect(screen.queryByRole("link", { name: /entrar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sair/i })).not.toBeInTheDocument();
+
+    rerender(
+      <AppShell isAdmin>
+        <p>conteúdo</p>
+      </AppShell>
+    );
+
+    expect(screen.getByRole("button", { name: /sair/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /entrar/i })).not.toBeInTheDocument();
+  });
 });

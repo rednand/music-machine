@@ -9,6 +9,8 @@ interface DeezerAlbumSearchItem {
   id: number;
   title: string;
   artist?: DeezerArtistRef;
+  cover_xl?: string;
+  cover_big?: string;
   cover_medium?: string;
   nb_tracks?: number;
 }
@@ -37,6 +39,8 @@ interface DeezerArtistAlbumItem {
   id: number;
   title: string;
   release_date: string;
+  cover_xl?: string;
+  cover_big?: string;
   cover_medium?: string;
   record_type: string;
   artist?: DeezerArtistRef;
@@ -56,7 +60,37 @@ interface DeezerTracksResponse {
   data: DeezerTrackItem[];
 }
 
-const MAX_SEARCH_ENRICH = 5;
+const REISSUE_KEYWORDS = "deluxe|remaster(?:ed)?|edition|anniversary|expanded|bonus|special|reissue|version";
+
+function stripReissueSuffix(title: string): string {
+  return title
+    .replace(new RegExp(`\\s*[([][^)\\]]*\\b(?:${REISSUE_KEYWORDS})\\b[^)\\]]*[)\\]]\\s*`, "gi"), " ")
+    .replace(new RegExp(`\\s*[-–]\\s*(?:${REISSUE_KEYWORDS})\\b.*$`, "i"), "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTitleForDedup(title: string): string {
+  return stripReissueSuffix(title).toLowerCase();
+}
+
+function keepOriginalEditions(albums: RawAlbumData[]): RawAlbumData[] {
+  const earliestByKey = new Map<string, RawAlbumData>();
+  const keyOrder: string[] = [];
+
+  for (const album of albums) {
+    const key = `${normalizeTitleForDedup(album.title)}|${album.artistName.toLowerCase()}`;
+    const existing = earliestByKey.get(key);
+    if (!existing) {
+      earliestByKey.set(key, album);
+      keyOrder.push(key);
+    } else if (album.releaseDate < existing.releaseDate) {
+      earliestByKey.set(key, album);
+    }
+  }
+
+  return keyOrder.map((key) => earliestByKey.get(key) as RawAlbumData);
+}
 
 export class CatalogProvider implements CatalogProviderAdapter {
   readonly providerName = "catalog";
@@ -80,29 +114,29 @@ export class CatalogProvider implements CatalogProviderAdapter {
     }
     const data = (await response.json()) as DeezerAlbumSearchResponse;
     const retrievedAt = new Date().toISOString();
-    const candidates = data.data.slice(0, MAX_SEARCH_ENRICH);
 
     const enriched = await Promise.all(
-      candidates.map(async (item): Promise<RawAlbumData | null> => {
+      data.data.map(async (item): Promise<RawAlbumData | null> => {
         const details = await this.fetchAlbumDetails(item.id);
         if (!details?.release_date) {
           return null;
         }
         return {
-          title: item.title,
+          title: stripReissueSuffix(item.title) || item.title,
           externalId: String(item.id),
           artistName: item.artist?.name ?? fallbackArtistName ?? "",
           releaseDate: details.release_date,
           genre: details.genres?.data[0]?.name,
           label: details.label,
           trackCount: details.nb_tracks ?? item.nb_tracks,
-          coverArtUrl: item.cover_medium,
+          coverArtUrl: item.cover_xl ?? item.cover_big ?? item.cover_medium,
           source: { providerName: this.providerName, url, retrievedAt }
         };
       })
     );
 
-    return enriched.filter((album): album is RawAlbumData => album !== null);
+    const resolved = enriched.filter((album): album is RawAlbumData => album !== null);
+    return keepOriginalEditions(resolved);
   }
 
   private async fetchAlbumDetails(albumId: number): Promise<DeezerAlbumDetails | null> {
@@ -164,7 +198,7 @@ export class CatalogProvider implements CatalogProviderAdapter {
         externalId: String(item.id),
         artistName: item.artist?.name ?? "",
         releaseDate: item.release_date,
-        coverArtUrl: item.cover_medium,
+        coverArtUrl: item.cover_xl ?? item.cover_big ?? item.cover_medium,
         source: { providerName: this.providerName, url, retrievedAt }
       }));
   }

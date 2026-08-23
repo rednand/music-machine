@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ push: vi.fn() }) }));
 
+const { getUserMock } = vi.hoisted(() => ({
+  getUserMock: vi.fn().mockResolvedValue({ data: { user: null } })
+}));
+vi.mock("../lib/supabase/server.js", () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({ auth: { getUser: getUserMock } })
+}));
+
 import DiscoverPage from "./page";
 import * as discoveryAction from "../actions/discovery";
 

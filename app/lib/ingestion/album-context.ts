@@ -17,6 +17,11 @@ import { deriveAlbumHook } from "../discovery/hook";
 
 const FACETS: NarrativeFacet[] = ["artist_moment", "world_context", "musical_scene", "reception_vs_legacy"];
 const SUMMARY_FACET: NarrativeFacet = "album_summary";
+const MAX_EXCERPT_LENGTH = 800;
+
+function truncateExcerpt(text: string): string {
+  return text.length > MAX_EXCERPT_LENGTH ? `${text.slice(0, MAX_EXCERPT_LENGTH)}…` : text;
+}
 
 function needsGeneration(article: { id: string; status: string } | null): boolean {
   return article === null || article.status === "stale";
@@ -59,6 +64,8 @@ export interface AlbumContextDeps {
   findRecommendationCandidates(albumId: string): Promise<RecommendationCandidateAlbum[]>;
   findDirectlyInfluencedAlbumIds(albumId: string): Promise<Set<string>>;
   recommendations: Pick<RecommendationRepository, "findBySubjectAlbumId" | "create">;
+  dedupeNarrativeTrigger(albumId: string): boolean;
+  scheduleBackgroundWork(run: () => Promise<void>): void;
 }
 
 export interface AlbumContextHeader {
@@ -115,36 +122,40 @@ export interface RecommendationEntry {
   explanation: string;
 }
 
-export interface AlbumContextBody {
+export interface TechnicalSheetBody {
   header: AlbumContextHeader;
   tracks: TrackRow[];
   credits: CreditRow[];
   otherAlbumsByArtist: OtherAlbumEntry[];
-  artistMoment: NarrativeStatement[];
-  worldContext: NarrativeStatement[];
-  musicalScene: NarrativeStatement[];
   sameEraAlbums: SameEraAlbumRef[];
   performance: PerformanceRecordRow[] | null;
-  receptionVsLegacy: NarrativeStatement[];
-  curiosities: CuriosityRow[];
-  influence: InfluenceEntry[];
   recommendations: RecommendationEntry[];
 }
 
-export type AlbumContextResult =
-  | { state: "ready"; body: AlbumContextBody }
-  | { state: "pending" }
-  | { state: "not_found" };
+export type TechnicalSheetResult =
+  | { state: "ready"; body: TechnicalSheetBody }
+  | { state: "not_found" }
+  | { state: "error"; message: string };
 
-interface GenerateAllFacetsResult {
-  facets: Record<NarrativeFacet, NarrativeStatement[]>;
+export type GenerationStatus = "not_started" | "in_progress" | "ready";
+
+export interface NarrativeBody {
+  artistMoment: NarrativeStatement[];
+  worldContext: NarrativeStatement[];
+  musicalScene: NarrativeStatement[];
+  receptionVsLegacy: NarrativeStatement[];
   summary: NarrativeStatement[];
-  credits: CreditRow[];
-  tracks: TrackRow[];
-  performance: PerformanceRecordRow[];
   curiosities: CuriosityRow[];
-  influence: InfluenceRow[];
+  influence: InfluenceEntry[];
+  failedFacets: NarrativeFacet[];
 }
+
+export type NarrativeResult =
+  | { state: "not_found" }
+  | { state: "not_started" }
+  | { state: "in_progress" }
+  | { state: "ready"; body: NarrativeBody }
+  | { state: "error" };
 
 async function persistIfMissing<TExisting, TRaw>(
   existing: TExisting[],
@@ -226,130 +237,153 @@ async function publishFacet(
   return facetResult.statements;
 }
 
-async function generateAllFacets(
+async function generateNarrative(
   album: AlbumRow,
   artist: ArtistRow | null,
   sameEraAlbums: SameEraAlbumRef[],
   existingArticles: Array<{ id: string; status: string } | null>,
   existingSummaryArticle: { id: string; status: string } | null,
   reviews: ReviewRow[],
-  existingCredits: CreditRow[],
-  existingTracks: TrackRow[],
-  existingPerformance: PerformanceRecordRow[],
   existingCuriosities: CuriosityRow[],
   existingInfluence: InfluenceRow[],
+  ingestedHint: IngestedAlbum | undefined,
   deps: AlbumContextDeps
-): Promise<GenerateAllFacetsResult> {
-  const facetsToGenerate = FACETS.filter((_facet, index) => needsGeneration(existingArticles[index]));
-  const summaryNeedsGeneration = needsGeneration(existingSummaryArticle);
-  const allFacetsToGenerate = summaryNeedsGeneration ? [...facetsToGenerate, SUMMARY_FACET] : facetsToGenerate;
+): Promise<void> {
+  try {
+    const facetsToGenerate = FACETS.filter((_facet, index) => needsGeneration(existingArticles[index]));
+    const summaryNeedsGeneration = needsGeneration(existingSummaryArticle);
+    const allFacetsToGenerate = summaryNeedsGeneration ? [...facetsToGenerate, SUMMARY_FACET] : facetsToGenerate;
 
-  const [historicalEvents, ingested] = await Promise.all([
-    facetsToGenerate.includes("world_context") ? deps.findHistoricalEvents(album.release_date) : Promise.resolve([]),
-    deps.ingestAlbum({ artistName: artist?.name ?? "", albumTitle: album.title })
-  ]);
+    const [historicalEvents, ingested] = await Promise.all([
+      facetsToGenerate.includes("world_context") ? deps.findHistoricalEvents(album.release_date) : Promise.resolve([]),
+      ingestedHint ?? deps.ingestAlbum({ artistName: artist?.name ?? "", albumTitle: album.title })
+    ]);
 
-  const [credits, tracks, performance] = await Promise.all([
-    persistIfMissing(existingCredits, ingested.credits, () => deps.persistCredits(album.id, ingested.credits)),
-    (async () => {
-      if (existingTracks.length > 0 || !ingested.externalId) {
-        return existingTracks;
+    const contextExcerpts = ingested.contextFacts.map((fact, index) => ({
+      id: `ctx-${index}`,
+      text: truncateExcerpt(fact.text)
+    }));
+    const reviewExcerpts = reviews.map((review, index) => ({
+      id: `review-${index}`,
+      text: truncateExcerpt(review.summary)
+    }));
+    const sourceExcerpts = [...contextExcerpts, ...reviewExcerpts];
+
+    const sourceRefs: SourceExcerptRef[] = [
+      ...ingested.contextFacts.map((fact, index) => ({ id: `ctx-${index}`, kind: "context" as const, source: fact.source })),
+      ...reviews.map((review, index) => ({ id: `review-${index}`, kind: "review" as const, sourceId: review.source_id }))
+    ];
+
+    const factInput = { albumTitle: album.title, artistName: artist?.name ?? "", sourceExcerpts };
+
+    const artistSummary = ingested.artistProfile.summary;
+    const influenceSourceExcerpts = artistSummary
+      ? [...sourceExcerpts, { id: "artist-ctx", text: truncateExcerpt(artistSummary.text) }]
+      : sourceExcerpts;
+    const influenceSourceRefs: SourceExcerptRef[] = artistSummary
+      ? [...sourceRefs, { id: "artist-ctx", kind: "context" as const, source: artistSummary.source }]
+      : sourceRefs;
+    const influenceFactInput = {
+      ...factInput,
+      sourceExcerpts: influenceSourceExcerpts,
+      confirmedInfluences: {
+        influencedBy: ingested.artistProfile.influencedBy,
+        influenced: ingested.artistProfile.influenced
       }
-      const rawTracks = await deps.fetchTracks(ingested.externalId);
-      return persistIfMissing(existingTracks, rawTracks, () => deps.persistTracks(album.id, rawTracks));
-    })(),
-    persistIfMissing(existingPerformance, ingested.performanceRecords, () =>
-      deps.persistPerformanceRecords(album.id, ingested.performanceRecords)
-    )
-  ]);
+    };
 
-  const contextExcerpts = ingested.contextFacts.map((fact, index) => ({
-    id: `ctx-${index}`,
-    text: fact.text
-  }));
-  const reviewExcerpts = reviews.map((review, index) => ({
-    id: `review-${index}`,
-    text: review.summary
-  }));
-  const sourceExcerpts = [...contextExcerpts, ...reviewExcerpts];
+    const [synthesized] = await Promise.all([
+      synthesizeNarrative(
+        {
+          albumTitle: album.title,
+          artistName: artist?.name ?? "",
+          structuredData: { releaseDate: album.release_date, label: album.label, genre: album.genre },
+          sameEraAlbums,
+          historicalEvents,
+          sourceExcerpts
+        },
+        deps.gptClient,
+        allFacetsToGenerate
+      ),
+      synthesizeAndPersist(
+        existingCuriosities,
+        () => synthesizeCuriosities(factInput, deps.gptClient),
+        sourceExcerpts,
+        (items) => deps.persistCuriosities(album.id, items, sourceRefs)
+      ),
+      synthesizeAndPersist(
+        existingInfluence,
+        () => synthesizeInfluence(influenceFactInput, deps.gptClient),
+        influenceSourceExcerpts,
+        (items) => deps.persistInfluence(album.id, items, influenceSourceRefs)
+      )
+    ]);
 
-  const sourceRefs: SourceExcerptRef[] = [
-    ...ingested.contextFacts.map((fact, index) => ({ id: `ctx-${index}`, kind: "context" as const, source: fact.source })),
-    ...reviews.map((review, index) => ({ id: `review-${index}`, kind: "review" as const, sourceId: review.source_id }))
-  ];
-
-  const factInput = { albumTitle: album.title, artistName: artist?.name ?? "", sourceExcerpts };
-
-  const artistSummary = ingested.artistProfile.summary;
-  const influenceSourceExcerpts = artistSummary
-    ? [...sourceExcerpts, { id: "artist-ctx", text: artistSummary.text }]
-    : sourceExcerpts;
-  const influenceSourceRefs: SourceExcerptRef[] = artistSummary
-    ? [...sourceRefs, { id: "artist-ctx", kind: "context" as const, source: artistSummary.source }]
-    : sourceRefs;
-  const influenceFactInput = {
-    ...factInput,
-    sourceExcerpts: influenceSourceExcerpts,
-    confirmedInfluences: {
-      influencedBy: ingested.artistProfile.influencedBy,
-      influenced: ingested.artistProfile.influenced
+    for (const [index, facet] of FACETS.entries()) {
+      await publishFacet(facet, existingArticles[index], synthesized.facets[facet], sourceExcerpts, album.id, deps);
     }
-  };
 
-  const [synthesized, curiosities, influence] = await Promise.all([
-    synthesizeNarrative(
-      {
-        albumTitle: album.title,
-        artistName: artist?.name ?? "",
-        structuredData: { releaseDate: album.release_date, label: album.label, genre: album.genre },
-        sameEraAlbums,
-        historicalEvents,
-        sourceExcerpts
+    const summaryResult = synthesized.facets[SUMMARY_FACET];
+    await publishFacet(
+      SUMMARY_FACET,
+      existingSummaryArticle,
+      summaryResult && {
+        ...summaryResult,
+        statements: summaryResult.statements.map((statement) => ({ ...statement, kind: "interpretation" as const, sourceIds: [] }))
       },
-      deps.gptClient,
-      allFacetsToGenerate
-    ),
-    synthesizeAndPersist(
-      existingCuriosities,
-      () => synthesizeCuriosities(factInput, deps.gptClient),
-      sourceExcerpts,
-      (items) => deps.persistCuriosities(album.id, items, sourceRefs)
-    ),
-    synthesizeAndPersist(
-      existingInfluence,
-      () => synthesizeInfluence(influenceFactInput, deps.gptClient),
-      influenceSourceExcerpts,
-      (items) => deps.persistInfluence(album.id, items, influenceSourceRefs)
-    )
-  ]);
-
-  const result = {} as Record<NarrativeFacet, NarrativeStatement[]>;
-
-  for (const [index, facet] of FACETS.entries()) {
-    result[facet] = await publishFacet(
-      facet,
-      existingArticles[index],
-      synthesized.facets[facet],
       sourceExcerpts,
       album.id,
       deps
     );
+  } catch (error) {
+    console.error(`Failed to generate narrative for album ${album.id}`, error);
+  }
+}
+
+async function triggerNarrativeGenerationIfNeeded(
+  album: AlbumRow,
+  artist: ArtistRow | null,
+  sameEraAlbums: SameEraAlbumRef[],
+  ingestedHint: IngestedAlbum | undefined,
+  deps: AlbumContextDeps
+): Promise<void> {
+  const [existingArticles, existingSummaryArticle] = await Promise.all([
+    Promise.all(FACETS.map((facet) => deps.narrativeArticles.findByAlbumAndFacet(album.id, facet))),
+    deps.narrativeArticles.findByAlbumAndFacet(album.id, SUMMARY_FACET)
+  ]);
+
+  const isPending =
+    existingArticles.some((article) => article?.status === "pending") || existingSummaryArticle?.status === "pending";
+  const isDone = existingArticles.every(isResolved) && isResolved(existingSummaryArticle);
+
+  if (isPending || isDone) {
+    return;
   }
 
-  const summaryResult = synthesized.facets[SUMMARY_FACET];
-  const summary = await publishFacet(
-    SUMMARY_FACET,
-    existingSummaryArticle,
-    summaryResult && {
-      ...summaryResult,
-      statements: summaryResult.statements.map((statement) => ({ ...statement, kind: "interpretation" as const, sourceIds: [] }))
-    },
-    sourceExcerpts,
-    album.id,
-    deps
-  );
+  if (!deps.dedupeNarrativeTrigger(album.id)) {
+    return;
+  }
 
-  return { facets: result, summary, credits, tracks, performance, curiosities, influence };
+  const [reviews, existingCuriosities, existingInfluence] = await Promise.all([
+    deps.findReviews(album.id),
+    deps.findCuriosities(album.id),
+    deps.findInfluences(album.id)
+  ]);
+
+  deps.scheduleBackgroundWork(() =>
+    generateNarrative(
+      album,
+      artist,
+      sameEraAlbums,
+      existingArticles,
+      existingSummaryArticle,
+      reviews,
+      existingCuriosities,
+      existingInfluence,
+      ingestedHint,
+      deps
+    )
+  );
 }
 
 async function enrichInfluence(influences: InfluenceRow[], deps: AlbumContextDeps): Promise<InfluenceEntry[]> {
@@ -421,7 +455,7 @@ async function resolveRecommendations(
   );
 }
 
-export async function assembleAlbumContext(albumId: string, deps: AlbumContextDeps): Promise<AlbumContextResult> {
+export async function assembleTechnicalSheet(albumId: string, deps: AlbumContextDeps): Promise<TechnicalSheetResult> {
   const album = await deps.findAlbum(albumId);
   if (!album) {
     return { state: "not_found" };
@@ -429,77 +463,56 @@ export async function assembleAlbumContext(albumId: string, deps: AlbumContextDe
 
   const artist = await deps.findArtistById(album.artist_id);
 
-  const [existingArticles, existingSummaryArticle] = await Promise.all([
-    Promise.all(FACETS.map((facet) => deps.narrativeArticles.findByAlbumAndFacet(albumId, facet))),
-    deps.narrativeArticles.findByAlbumAndFacet(albumId, SUMMARY_FACET)
-  ]);
+  let existingTracks: TrackRow[];
+  let existingCredits: CreditRow[];
+  let artistAlbums: AlbumRow[];
+  let existingPerformance: PerformanceRecordRow[];
+  let recommendationRows: RecommendationRow[];
+  let sameEraAlbums: SameEraAlbumRef[];
+  let discography: DiscographyEntry[];
 
-  if (existingArticles.some((article) => article?.status === "pending") || existingSummaryArticle?.status === "pending") {
-    return { state: "pending" };
+  try {
+    [existingTracks, existingCredits, artistAlbums, existingPerformance, recommendationRows, sameEraAlbums, discography] =
+      await Promise.all([
+        deps.findTracks(albumId),
+        deps.findCredits(albumId),
+        deps.findAlbumsByArtistId(album.artist_id),
+        deps.findPerformanceRecords(albumId),
+        resolveRecommendations(album, deps),
+        deps.findSameEraAlbums(album),
+        artist ? deps.findArtistDiscography(artist) : Promise.resolve([])
+      ]);
+  } catch (error) {
+    console.error(`Failed to load existing technical sheet data for album ${albumId}`, error);
+    return { state: "error", message: "Não foi possível carregar os dados técnicos deste álbum." };
   }
 
-  const [
-    existingTracks,
-    existingCredits,
-    artistAlbums,
-    existingPerformance,
-    reviews,
-    existingCuriosities,
-    existingInfluence,
-    recommendations,
-    sameEraAlbums,
-    discography
-  ] = await Promise.all([
-    deps.findTracks(albumId),
-    deps.findCredits(albumId),
-    deps.findAlbumsByArtistId(album.artist_id),
-    deps.findPerformanceRecords(albumId),
-    deps.findReviews(albumId),
-    deps.findCuriosities(albumId),
-    deps.findInfluences(albumId),
-    resolveRecommendations(album, deps),
-    deps.findSameEraAlbums(album),
-    artist ? deps.findArtistDiscography(artist) : Promise.resolve([])
-  ]);
+  let tracks = existingTracks;
+  let credits = existingCredits;
+  let performance = existingPerformance;
+  let ingested: IngestedAlbum | undefined;
 
-  let facetStatements: Record<NarrativeFacet, NarrativeStatement[]>;
-  let credits: CreditRow[] = existingCredits;
-  let tracks: TrackRow[] = existingTracks;
-  let performance: PerformanceRecordRow[] = existingPerformance;
-  let curiosities: CuriosityRow[] = existingCuriosities;
-  let influence: InfluenceRow[] = existingInfluence;
-
-  if (existingArticles.every(isResolved) && isResolved(existingSummaryArticle)) {
-    const statementsPerFacet = await Promise.all(
-      existingArticles.map((article) =>
-        article!.status === "published" ? deps.narrativeArticles.findStatementsByArticleId(article!.id) : Promise.resolve([])
-      )
-    );
-    facetStatements = FACETS.reduce(
-      (acc, facet, index) => ({ ...acc, [facet]: statementsPerFacet[index] }),
-      {} as Record<NarrativeFacet, NarrativeStatement[]>
-    );
-  } else {
-    const generated = await generateAllFacets(
-      album,
-      artist,
-      sameEraAlbums,
-      existingArticles,
-      existingSummaryArticle,
-      reviews,
-      existingCredits,
-      existingTracks,
-      existingPerformance,
-      existingCuriosities,
-      existingInfluence,
-      deps
-    );
-    facetStatements = generated.facets;
-    credits = generated.credits;
-    tracks = generated.tracks;
-    performance = generated.performance;
-    curiosities = generated.curiosities;
-    influence = generated.influence;
+  if (existingTracks.length === 0) {
+    try {
+      ingested = await deps.ingestAlbum({ artistName: artist?.name ?? "", albumTitle: album.title });
+      const ingestedAlbum = ingested;
+      [credits, tracks, performance] = await Promise.all([
+        persistIfMissing(existingCredits, ingestedAlbum.credits, () => deps.persistCredits(album.id, ingestedAlbum.credits)),
+        (async () => {
+          if (!ingestedAlbum.externalId) {
+            return existingTracks;
+          }
+          const rawTracks = await deps.fetchTracks(ingestedAlbum.externalId);
+          return persistIfMissing(existingTracks, rawTracks, () => deps.persistTracks(album.id, rawTracks));
+        })(),
+        persistIfMissing(existingPerformance, ingestedAlbum.performanceRecords, () =>
+          deps.persistPerformanceRecords(album.id, ingestedAlbum.performanceRecords)
+        )
+      ]);
+    } catch (error) {
+      console.error(`Failed to ingest technical sheet for album ${albumId}`, error);
+      return { state: "error", message: "Não foi possível buscar os dados técnicos deste álbum." };
+    }
   }
 
   const hook = await deriveAlbumHook(albumId, deps.narrativeArticles);
@@ -528,10 +541,9 @@ export async function assembleAlbumContext(albumId: string, deps: AlbumContextDe
     a.releaseYear.localeCompare(b.releaseYear)
   );
 
-  const [enrichedInfluence, enrichedRecommendations] = await Promise.all([
-    enrichInfluence(influence, deps),
-    enrichRecommendations(recommendations, deps)
-  ]);
+  const recommendations = await enrichRecommendations(recommendationRows, deps);
+
+  await triggerNarrativeGenerationIfNeeded(album, artist, sameEraAlbums, ingested, deps);
 
   return {
     state: "ready",
@@ -550,15 +562,77 @@ export async function assembleAlbumContext(albumId: string, deps: AlbumContextDe
       tracks,
       credits,
       otherAlbumsByArtist,
-      artistMoment: facetStatements.artist_moment,
-      worldContext: facetStatements.world_context,
-      musicalScene: facetStatements.musical_scene,
       sameEraAlbums,
       performance: performance.length > 0 ? performance : null,
-      receptionVsLegacy: facetStatements.reception_vs_legacy,
-      curiosities,
-      influence: enrichedInfluence,
-      recommendations: enrichedRecommendations
+      recommendations
     }
   };
+}
+
+export async function assembleNarrative(albumId: string, deps: AlbumContextDeps): Promise<NarrativeResult> {
+  try {
+    const album = await deps.findAlbum(albumId);
+    if (!album) {
+      return { state: "not_found" };
+    }
+
+    const [existingArticles, existingSummaryArticle] = await Promise.all([
+      Promise.all(FACETS.map((facet) => deps.narrativeArticles.findByAlbumAndFacet(albumId, facet))),
+      deps.narrativeArticles.findByAlbumAndFacet(albumId, SUMMARY_FACET)
+    ]);
+
+    if (existingArticles.some((article) => article?.status === "pending") || existingSummaryArticle?.status === "pending") {
+      return { state: "in_progress" };
+    }
+
+    if (!existingArticles.every(isResolved) || !isResolved(existingSummaryArticle)) {
+      return { state: "not_started" };
+    }
+
+    const failedFacets: NarrativeFacet[] = [];
+    const statementsPerFacet = await Promise.all(
+      existingArticles.map((article, index) => {
+        if (article!.status === "failed_validation") {
+          failedFacets.push(FACETS[index]);
+          return Promise.resolve<NarrativeStatement[]>([]);
+        }
+        return deps.narrativeArticles.findStatementsByArticleId(article!.id);
+      })
+    );
+
+    let summary: NarrativeStatement[] = [];
+    if (existingSummaryArticle.status === "failed_validation") {
+      failedFacets.push(SUMMARY_FACET);
+    } else {
+      summary = await deps.narrativeArticles.findStatementsByArticleId(existingSummaryArticle.id);
+    }
+
+    const [curiosities, influenceRows] = await Promise.all([
+      deps.findCuriosities(albumId),
+      deps.findInfluences(albumId)
+    ]);
+    const influence = await enrichInfluence(influenceRows, deps);
+
+    const facetStatements = FACETS.reduce(
+      (acc, facet, index) => ({ ...acc, [facet]: statementsPerFacet[index] }),
+      {} as Record<NarrativeFacet, NarrativeStatement[]>
+    );
+
+    return {
+      state: "ready",
+      body: {
+        artistMoment: facetStatements.artist_moment,
+        worldContext: facetStatements.world_context,
+        musicalScene: facetStatements.musical_scene,
+        receptionVsLegacy: facetStatements.reception_vs_legacy,
+        summary,
+        curiosities,
+        influence,
+        failedFacets
+      }
+    };
+  } catch (error) {
+    console.error(`Failed to read narrative status for album ${albumId}`, error);
+    return { state: "error" };
+  }
 }

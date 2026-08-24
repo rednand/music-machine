@@ -1,9 +1,7 @@
-const MILLISECONDS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-const DEFAULT_WINDOW_YEARS = 2;
+const DEFAULT_WINDOW_YEARS = 1;
 
 export function isSameEra(a: Date, b: Date, windowYears: number = DEFAULT_WINDOW_YEARS): boolean {
-  const diffYears = Math.abs(a.getTime() - b.getTime()) / MILLISECONDS_PER_YEAR;
-  return diffYears <= windowYears;
+  return Math.abs(a.getUTCFullYear() - b.getUTCFullYear()) <= windowYears;
 }
 
 export interface AlbumWithReleaseDate {

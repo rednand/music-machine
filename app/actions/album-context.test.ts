@@ -12,6 +12,10 @@ vi.mock("../lib/supabase/admin.js", () => ({
   createSupabaseAdminClient: vi.fn().mockReturnValue({})
 }));
 
+vi.mock("../lib/auth", () => ({
+  getCurrentIsAdmin: vi.fn().mockResolvedValue(false)
+}));
+
 vi.mock("next/server", () => ({
   after: vi.fn()
 }));

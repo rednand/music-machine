@@ -85,7 +85,8 @@ export function createAlbumRepository(supabase: SupabaseLike) {
       const { data } = await supabase
         .from<AlbumRow>("albums")
         .select("*")
-        .ilike("release_date", `${year}%`)
+        .gte("release_date", `${year}-01-01`)
+        .lte("release_date", `${year}-12-31`)
         .order("release_date", { ascending: true });
       return data ?? [];
     },

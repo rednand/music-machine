@@ -54,6 +54,25 @@ describe("HistoricalEventsProvider", () => {
     expect(events).toEqual([{ title: "assassinato de Charlie Kirk", date: "2025-09-10" }]);
   });
 
+  it("filters out Wikinotícias/Wikinews/Portal index pages", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      jsonResponse({
+        results: {
+          bindings: [
+            sparqlBinding("Wikinotícias:2016/fevereiro", "2016-02-01T00:00:00Z", "45"),
+            sparqlBinding("Portal:Eventos correntes/Fevereiro de 2016", "2016-02-01T00:00:00Z", "12"),
+            sparqlBinding("acidente do vaivém Challenger", "1986-01-28T00:00:00Z", "52")
+          ]
+        }
+      })
+    );
+    const provider = new HistoricalEventsProvider({ userAgent: "test-agent/1.0" }, fetchImpl as unknown as typeof fetch);
+
+    const events = await provider.fetchEvents("2016-02-04");
+
+    expect(events).toEqual([{ title: "acidente do vaivém Challenger", date: "1986-01-28" }]);
+  });
+
   it("dedupes repeated titles, keeping the first (highest-ranked) occurrence", async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(
       jsonResponse({

@@ -2,9 +2,23 @@ import type { AlbumRow, ArtistRow } from "../db/album";
 import type { HistoricalEventRef } from "../ai/narrative";
 import type { DiscoveryPageEntry } from "./collection";
 
+export interface YearAlbumEntry extends DiscoveryPageEntry {
+  releaseDate: string;
+}
+
+export type YearTimelineItem =
+  | { kind: "event"; date: string; title: string }
+  | { kind: "album"; date: string; album: YearAlbumEntry };
+
 export type YearPageResult =
   | { state: "invalid" }
-  | { state: "ready"; year: string; albums: DiscoveryPageEntry[]; historicalEvents: HistoricalEventRef[] };
+  | {
+      state: "ready";
+      year: string;
+      albums: YearAlbumEntry[];
+      historicalEvents: HistoricalEventRef[];
+      timeline: YearTimelineItem[];
+    };
 
 export interface YearPageDeps {
   findAlbumsByReleaseYear(year: string): Promise<AlbumRow[]>;
@@ -24,7 +38,7 @@ function isValidYear(year: string): boolean {
   return numeric >= MIN_YEAR && numeric <= new Date().getFullYear();
 }
 
-async function toEntry(album: AlbumRow, deps: YearPageDeps): Promise<DiscoveryPageEntry> {
+async function toEntry(album: AlbumRow, deps: YearPageDeps): Promise<YearAlbumEntry> {
   const [artist, hook] = await Promise.all([deps.findArtistById(album.artist_id), deps.deriveHook(album.id)]);
 
   return {
@@ -32,6 +46,7 @@ async function toEntry(album: AlbumRow, deps: YearPageDeps): Promise<DiscoveryPa
     title: album.title,
     artistName: artist?.name ?? "",
     releaseYear: album.release_date.slice(0, 4),
+    releaseDate: album.release_date,
     coverArtUrl: album.cover_art_url,
     hook
   };
@@ -60,5 +75,10 @@ export async function buildYearPage(year: string, deps: YearPageDeps): Promise<Y
     return true;
   });
 
-  return { state: "ready", year, albums, historicalEvents };
+  const timeline: YearTimelineItem[] = [
+    ...historicalEvents.map((event): YearTimelineItem => ({ kind: "event", date: event.date, title: event.title })),
+    ...albums.map((album): YearTimelineItem => ({ kind: "album", date: album.releaseDate, album }))
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  return { state: "ready", year, albums, historicalEvents, timeline };
 }

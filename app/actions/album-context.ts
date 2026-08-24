@@ -1,6 +1,8 @@
 "use server";
 
 import { after } from "next/server";
+import { getCurrentIsAdmin } from "../lib/auth";
+import { runWithAdminTrace, traceDeps } from "../lib/debug/admin-trace";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { createSupabaseAdminClient } from "../lib/supabase/admin";
 import { createAlbumRepository } from "../lib/db/album";
@@ -45,6 +47,30 @@ import Groq from "groq-sdk";
 export type { TechnicalSheetResult, NarrativeResult } from "../lib/ingestion/album-context";
 
 const narrativeTriggerLimiter = new InMemoryRateLimiter();
+
+const TRACED_DEP_KEYS: (keyof AlbumContextDeps)[] = [
+  "findAlbum",
+  "findArtistById",
+  "findTracks",
+  "persistTracks",
+  "fetchTracks",
+  "findCredits",
+  "persistCredits",
+  "findAlbumsByArtistId",
+  "findPerformanceRecords",
+  "persistPerformanceRecords",
+  "findReviews",
+  "findCuriosities",
+  "persistCuriosities",
+  "findInfluences",
+  "persistInfluence",
+  "findSameEraAlbums",
+  "findHistoricalEvents",
+  "findArtistDiscography",
+  "ingestAlbum",
+  "findRecommendationCandidates",
+  "findDirectlyInfluencedAlbumIds"
+];
 
 async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
   const supabase = toSupabaseLike(await createSupabaseServerClient());
@@ -103,7 +129,7 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
     userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
 
-  return {
+  const deps: AlbumContextDeps = {
     findAlbum: (id) => albumRepo.findAlbumById(id),
     findArtistById: (id) => albumRepo.findArtistById(id),
     findTracks: (id) => albumRepo.findTracksByAlbumId(id),
@@ -142,14 +168,20 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
       after(run);
     }
   };
+
+  return traceDeps(deps, TRACED_DEP_KEYS);
 }
 
 export async function getAlbumTechnicalSheet(albumId: string): Promise<TechnicalSheetResult> {
+  const isAdmin = await getCurrentIsAdmin();
   const deps = await buildAlbumContextDeps();
-  return assembleTechnicalSheet(albumId, deps);
+  const { result } = await runWithAdminTrace(isAdmin, () => assembleTechnicalSheet(albumId, deps));
+  return result;
 }
 
 export async function getAlbumNarrative(albumId: string): Promise<NarrativeResult> {
+  const isAdmin = await getCurrentIsAdmin();
   const deps = await buildAlbumContextDeps();
-  return assembleNarrative(albumId, deps);
+  const { result } = await runWithAdminTrace(isAdmin, () => assembleNarrative(albumId, deps));
+  return result;
 }

@@ -10,6 +10,8 @@ export interface SupabaseQueryBuilder<T = Record<string, unknown>> {
   delete(): SupabaseQueryBuilder<T>;
   eq(column: string, value: unknown): SupabaseQueryBuilder<T>;
   ilike(column: string, pattern: string): SupabaseQueryBuilder<T>;
+  gte(column: string, value: unknown): SupabaseQueryBuilder<T>;
+  lte(column: string, value: unknown): SupabaseQueryBuilder<T>;
   order(column: string, options?: { ascending?: boolean }): SupabaseQueryBuilder<T>;
   limit(count: number): SupabaseQueryBuilder<T>;
   maybeSingle(): Promise<SupabaseQueryResult<T>>;

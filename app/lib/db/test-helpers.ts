@@ -68,6 +68,14 @@ export function createFakeSupabase(tables: FakeSupabaseTables) {
         filters.push((row) => matchesIlike(row[column], pattern));
         return builder;
       }),
+      gte: vi.fn().mockImplementation((column: string, value: unknown) => {
+        filters.push((row) => (row[column] as string) >= (value as string));
+        return builder;
+      }),
+      lte: vi.fn().mockImplementation((column: string, value: unknown) => {
+        filters.push((row) => (row[column] as string) <= (value as string));
+        return builder;
+      }),
       order: vi.fn().mockImplementation((column: string, opts?: { ascending?: boolean }) => {
         orderColumn = column;
         orderAscending = opts?.ascending ?? true;

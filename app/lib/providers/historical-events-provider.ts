@@ -23,7 +23,8 @@ const NOISE_PATTERNS = [
   /^\d{4}$/,
   /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}$/i,
   /^(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) de \d{4}$/i,
-  /^(mortes em .+ de \d{4}|deaths in .+ \d{4})$/i
+  /^(mortes em .+ de \d{4}|deaths in .+ \d{4})$/i,
+  /^(wikinotícias|wikinews|portal|category|categoria):/i
 ];
 
 function isNoise(title: string): boolean {

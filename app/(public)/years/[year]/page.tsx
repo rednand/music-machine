@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getYearContext } from "@/app/actions/year-context";
-import { SectionCard } from "@/components/SectionCard";
-import { CollectionList } from "@/components/CollectionList";
+import { YearTimeline } from "@/components/YearTimeline";
 
 export default async function YearPage({ params }: { params: Promise<{ year: string }> }) {
   const { year } = await params;
@@ -24,26 +23,11 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
         {result.year}
       </h1>
 
-      {result.historicalEvents.length > 0 && (
-        <div className="mt-10">
-          <SectionCard title="O mundo nesse ano">
-            <ul className="flex flex-col gap-3">
-              {result.historicalEvents.map((event) => (
-                <li key={event.title} className="font-sans text-[15px] font-light leading-relaxed text-[#443f4f]">
-                  <span className="mr-2 font-mono text-[10px] tracking-[0.18em] text-[#0d7a5c]">{event.date}</span>
-                  {event.title}
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
-        </div>
-      )}
-
       <div className="mt-10">
-        {result.albums.length === 0 ? (
-          <p className="font-light text-[#443f4f]">Nenhum álbum de {result.year} no acervo ainda.</p>
+        {result.timeline.length === 0 ? (
+          <p className="font-light text-[#443f4f]">Nada registrado para {result.year} ainda.</p>
         ) : (
-          <CollectionList entries={result.albums} previewCount={result.albums.length} />
+          <YearTimeline items={result.timeline} />
         )}
       </div>
     </div>

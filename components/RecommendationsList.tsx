@@ -20,7 +20,7 @@ export function RecommendationsList({ recommendations }: { recommendations: Reco
         <Link
           key={recommendation.id}
           href={`/albums/${recommendation.albumId}`}
-          className="flex items-center gap-4 rounded-xl border border-white/90 bg-white/50 p-4 backdrop-blur-xl transition hover:bg-white/70"
+          className="flex min-w-0 items-center gap-4 rounded-xl border border-white/90 bg-white/50 p-4 backdrop-blur-xl transition hover:bg-white/70"
           style={{ boxShadow: "0 24px 44px -36px rgba(23,20,32,0.35)" }}
         >
           <div

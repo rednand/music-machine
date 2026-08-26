@@ -17,11 +17,16 @@ export default async function DiscoverPage() {
   return (
     <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:pl-0 md:pr-[clamp(24px,4vw,72px)]">
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(190px,340px)] md:gap-[clamp(24px,3vw,56px)]">
-        <div>
+        <div className="min-w-0">
           <div className="mb-[26px] flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-disco-relogio.svg" alt="" aria-hidden="true" className="h-[72px] w-[72px] flex-none" />
-            <h1 className="font-heading text-[clamp(30px,3.4vw,50px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#d1145a]">
+            <img
+              src="/logo-disco-relogio.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-12 w-12 flex-none sm:h-[72px] sm:w-[72px]"
+            />
+            <h1 className="min-w-0 font-heading text-[clamp(22px,6.5vw,50px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#d1145a]">
               Discontexto
             </h1>
           </div>
@@ -42,7 +47,7 @@ export default async function DiscoverPage() {
         </div>
 
         {result.state === "ready" && (
-          <div className="relative min-h-[470px] w-full">
+          <div className="relative min-h-[470px] w-full min-w-0">
             {covers.map((entry, index) => (
               <FeaturedAlbumCard key={entry.albumId} entry={entry} index={index} />
             ))}
@@ -70,8 +75,10 @@ export default async function DiscoverPage() {
 
       {result.state === "ready" && (
         <>
-          <div className="mt-24 flex items-end justify-between">
-            <h2 className="font-heading text-[46px] font-extrabold tracking-[-0.025em] text-[#120f18]">O acervo</h2>
+          <div className="mt-24 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <h2 className="font-heading text-[clamp(30px,8vw,46px)] font-extrabold tracking-[-0.025em] text-[#120f18]">
+              O acervo
+            </h2>
             <span className="font-mono text-[10px] tracking-[0.26em] text-[#a8a2b0]">ROLE E ESCOLHA</span>
           </div>
           <div className="mt-9">

@@ -44,7 +44,7 @@ export function YearTimeline({ items }: { items: YearTimelineItem[] }) {
                 <div className="font-mono text-[10px] tracking-[0.2em] text-[#d1145a]">
                   {item.album.artistName.toUpperCase()}
                 </div>
-                <h3 className="mt-1 font-serif text-2xl font-bold tracking-[-0.01em] text-[#120f18]">
+                <h3 className="mt-1 break-words font-serif text-2xl font-bold tracking-[-0.01em] text-[#120f18]">
                   {item.album.title}
                 </h3>
                 {item.album.hook && (

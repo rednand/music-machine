@@ -48,7 +48,7 @@ export default async function AlbumPage({
         href="/"
         className="mb-8 inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.22em] text-[#6b6577] transition-colors hover:text-[#d1145a]"
       >
-        ← ACERVO
+        ← HOME
       </Link>
 
       <Header header={body.header} />

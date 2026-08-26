@@ -18,11 +18,13 @@ export default async function DiscoverPage() {
     <div className="relative mx-auto max-w-[1560px] px-6 py-[74px] pb-[140px] md:pl-0 md:pr-[clamp(24px,4vw,72px)]">
       <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1.55fr)_minmax(190px,340px)] md:gap-[clamp(24px,3vw,56px)]">
         <div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-disco-relogio.svg" alt="" aria-hidden="true" className="mb-[26px] h-[104px] w-[104px]" />
-          <h1 className="font-heading text-[clamp(30px,3.4vw,50px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#d1145a]">
-            Disco em contexto
-          </h1>
+          <div className="mb-[26px] flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-disco-relogio.svg" alt="" aria-hidden="true" className="h-[72px] w-[72px] flex-none" />
+            <h1 className="font-heading text-[clamp(30px,3.4vw,50px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#d1145a]">
+              Discontexto
+            </h1>
+          </div>
           <p className="mt-10 max-w-[520px] text-[19px] font-light leading-[1.6] text-[#443f4f]">
             O que acontecia na vida do artista, no mundo e nas paradas quando o disco caiu — e como ele
             soa agora. Nada de resenha: só contexto.

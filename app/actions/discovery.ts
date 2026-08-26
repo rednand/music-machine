@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "../lib/supabase/server";
 import { createAlbumRepository } from "../lib/db/album";
 import { createNarrativeArticleRepository } from "../lib/db/narrative-article";
 import { toSupabaseLike } from "../lib/db/supabase-like";
-import { deriveAlbumHook } from "../lib/discovery/hook";
+import { deriveAlbumHooksBatch } from "../lib/discovery/hook";
 import { buildDiscoveryPage, type DiscoveryPageResult } from "../lib/discovery/collection";
 
 export type { DiscoveryPageResult } from "../lib/discovery/collection";
@@ -16,11 +16,12 @@ export async function getDiscoveryPage(): Promise<DiscoveryPageResult> {
 
   return buildDiscoveryPage({
     findAlbumsOrderedByCreatedAt: () => albumRepo.findAlbumsOrderedByCreatedAt(),
-    findArtistById: (artistId) => albumRepo.findArtistById(artistId),
-    deriveHook: (albumId) =>
-      deriveAlbumHook(albumId, {
-        findByAlbumAndFacet: (id, facet) => narrativeArticles.findByAlbumAndFacet(id, facet),
-        findStatementsByArticleId: (articleId) => narrativeArticles.findStatementsByArticleId(articleId)
+    findArtistsByIds: (artistIds) => albumRepo.findArtistsByIds(artistIds),
+    deriveHooksBatch: (albumIds) =>
+      deriveAlbumHooksBatch(albumIds, {
+        findPublishedByAlbumIdsAndFacets: (ids, facets) =>
+          narrativeArticles.findPublishedByAlbumIdsAndFacets(ids, facets),
+        findFirstStatementTextByArticleIds: (ids) => narrativeArticles.findFirstStatementTextByArticleIds(ids)
       })
   });
 }

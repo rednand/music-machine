@@ -18,11 +18,13 @@ describe("buildDiscoveryPage", () => {
   it("returns the empty state when the catalog has zero albums", async () => {
     const deps = {
       findAlbumsOrderedByCreatedAt: vi.fn().mockResolvedValue([]),
-      findArtistById: vi.fn(),
-      deriveHook: vi.fn()
+      findArtistsByIds: vi.fn(),
+      deriveHooksBatch: vi.fn()
     };
 
     expect(await buildDiscoveryPage(deps)).toEqual({ state: "empty" });
+    expect(deps.findArtistsByIds).not.toHaveBeenCalled();
+    expect(deps.deriveHooksBatch).not.toHaveBeenCalled();
   });
 
   it("builds a featured entry and a collection including it, in the given order", async () => {
@@ -31,10 +33,13 @@ describe("buildDiscoveryPage", () => {
         album({ id: "album-2", title: "True Blue" }),
         album({ id: "album-1", title: "Control", release_date: "1986-02-04" })
       ]),
-      findArtistById: vi.fn().mockImplementation((artistId: string) =>
-        Promise.resolve({ id: artistId, name: artistId === "artist-1" ? "Madonna" : "Janet Jackson" })
-      ),
-      deriveHook: vi.fn().mockResolvedValue("O disco em que a estrela pop virou autora.")
+      findArtistsByIds: vi.fn().mockResolvedValue([
+        { id: "artist-1", name: "Madonna" },
+        { id: "artist-2", name: "Janet Jackson" }
+      ]),
+      deriveHooksBatch: vi
+        .fn()
+        .mockResolvedValue(new Map([["album-1", "O disco em que a estrela pop virou autora."], ["album-2", null]]))
     };
 
     const result = await buildDiscoveryPage(deps);
@@ -45,15 +50,30 @@ describe("buildDiscoveryPage", () => {
       expect(result.collection.map((entry) => entry.albumId)).toEqual(["album-2", "album-1"]);
       expect(result.collection[0]).toEqual(result.featured);
       expect(result.featured.releaseYear).toBe("1986");
-      expect(result.featured.hook).toBe("O disco em que a estrela pop virou autora.");
+      expect(result.collection[1].hook).toBe("O disco em que a estrela pop virou autora.");
     }
+  });
+
+  it("fetches artists and hooks in a single batched call each, not once per album", async () => {
+    const deps = {
+      findAlbumsOrderedByCreatedAt: vi.fn().mockResolvedValue([album({ id: "album-1" }), album({ id: "album-2" })]),
+      findArtistsByIds: vi.fn().mockResolvedValue([{ id: "artist-1", name: "Madonna" }]),
+      deriveHooksBatch: vi.fn().mockResolvedValue(new Map())
+    };
+
+    await buildDiscoveryPage(deps);
+
+    expect(deps.findArtistsByIds).toHaveBeenCalledTimes(1);
+    expect(deps.findArtistsByIds).toHaveBeenCalledWith(["artist-1"]);
+    expect(deps.deriveHooksBatch).toHaveBeenCalledTimes(1);
+    expect(deps.deriveHooksBatch).toHaveBeenCalledWith(["album-1", "album-2"]);
   });
 
   it("renders a single-album catalog as both the featured entry and the sole collection entry", async () => {
     const deps = {
       findAlbumsOrderedByCreatedAt: vi.fn().mockResolvedValue([album()]),
-      findArtistById: vi.fn().mockResolvedValue({ id: "artist-1", name: "Madonna" }),
-      deriveHook: vi.fn().mockResolvedValue(null)
+      findArtistsByIds: vi.fn().mockResolvedValue([{ id: "artist-1", name: "Madonna" }]),
+      deriveHooksBatch: vi.fn().mockResolvedValue(new Map())
     };
 
     const result = await buildDiscoveryPage(deps);
@@ -68,8 +88,8 @@ describe("buildDiscoveryPage", () => {
   it("sets hook to null and still renders the entry when the album has no usable narrative yet", async () => {
     const deps = {
       findAlbumsOrderedByCreatedAt: vi.fn().mockResolvedValue([album()]),
-      findArtistById: vi.fn().mockResolvedValue({ id: "artist-1", name: "Madonna" }),
-      deriveHook: vi.fn().mockResolvedValue(null)
+      findArtistsByIds: vi.fn().mockResolvedValue([{ id: "artist-1", name: "Madonna" }]),
+      deriveHooksBatch: vi.fn().mockResolvedValue(new Map())
     };
 
     const result = await buildDiscoveryPage(deps);
@@ -84,8 +104,8 @@ describe("buildDiscoveryPage", () => {
   it("still renders an entry when the artist has no resolvable name", async () => {
     const deps = {
       findAlbumsOrderedByCreatedAt: vi.fn().mockResolvedValue([album()]),
-      findArtistById: vi.fn().mockResolvedValue(null),
-      deriveHook: vi.fn().mockResolvedValue(null)
+      findArtistsByIds: vi.fn().mockResolvedValue([]),
+      deriveHooksBatch: vi.fn().mockResolvedValue(new Map())
     };
 
     const result = await buildDiscoveryPage(deps);

@@ -24,7 +24,7 @@ function toBriefHook(text: string): string {
   return `${truncated.slice(0, lastSpace > 0 ? lastSpace : MAX_HOOK_LENGTH).trimEnd()}…`;
 }
 
-export async function deriveAlbumHook(albumId: string, deps: HookDeps): Promise<string | null> {
+async function findBestStatementText(albumId: string, deps: HookDeps): Promise<string | null> {
   for (const facet of FACET_PREFERENCE) {
     const article = await deps.findByAlbumAndFacet(albumId, facet);
     if (article?.status !== "published") {
@@ -33,9 +33,55 @@ export async function deriveAlbumHook(albumId: string, deps: HookDeps): Promise<
 
     const statements = await deps.findStatementsByArticleId(article.id);
     if (statements.length > 0) {
-      return toBriefHook(statements[0].text);
+      return statements[0].text;
     }
   }
 
   return null;
+}
+
+export async function deriveAlbumHook(albumId: string, deps: HookDeps): Promise<string | null> {
+  const text = await findBestStatementText(albumId, deps);
+  return text ? toBriefHook(text) : null;
+}
+
+export async function deriveAlbumFullHook(albumId: string, deps: HookDeps): Promise<string | null> {
+  return findBestStatementText(albumId, deps);
+}
+
+export interface BatchHookDeps {
+  findPublishedByAlbumIdsAndFacets(
+    albumIds: string[],
+    facets: NarrativeFacet[]
+  ): Promise<{ id: string; album_id: string; facet: NarrativeFacet }[]>;
+  findFirstStatementTextByArticleIds(articleIds: string[]): Promise<Map<string, string>>;
+}
+
+export async function deriveAlbumHooksBatch(albumIds: string[], deps: BatchHookDeps): Promise<Map<string, string | null>> {
+  const hooksByAlbumId = new Map<string, string | null>(albumIds.map((albumId) => [albumId, null]));
+  if (albumIds.length === 0) {
+    return hooksByAlbumId;
+  }
+
+  const publishedArticles = await deps.findPublishedByAlbumIdsAndFacets(albumIds, FACET_PREFERENCE);
+
+  const bestArticleByAlbumId = new Map<string, { id: string; facet: NarrativeFacet }>();
+  for (const article of publishedArticles) {
+    const current = bestArticleByAlbumId.get(article.album_id);
+    if (!current || FACET_PREFERENCE.indexOf(article.facet) < FACET_PREFERENCE.indexOf(current.facet)) {
+      bestArticleByAlbumId.set(article.album_id, article);
+    }
+  }
+
+  const articleIds = Array.from(bestArticleByAlbumId.values(), (article) => article.id);
+  const firstTextByArticleId = await deps.findFirstStatementTextByArticleIds(articleIds);
+
+  for (const [albumId, article] of bestArticleByAlbumId) {
+    const text = firstTextByArticleId.get(article.id);
+    if (text) {
+      hooksByAlbumId.set(albumId, toBriefHook(text));
+    }
+  }
+
+  return hooksByAlbumId;
 }

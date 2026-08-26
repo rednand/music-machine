@@ -6,6 +6,7 @@ export interface DiscoveryPageEntry {
   artistName: string;
   releaseYear: string;
   coverArtUrl?: string;
+  genre?: string;
   hook: string | null;
 }
 
@@ -15,20 +16,23 @@ export type DiscoveryPageResult =
 
 export interface CollectionDeps {
   findAlbumsOrderedByCreatedAt(): Promise<AlbumRow[]>;
-  findArtistById(artistId: string): Promise<ArtistRow | null>;
-  deriveHook(albumId: string): Promise<string | null>;
+  findArtistsByIds(artistIds: string[]): Promise<ArtistRow[]>;
+  deriveHooksBatch(albumIds: string[]): Promise<Map<string, string | null>>;
 }
 
-async function toEntry(album: AlbumRow, deps: CollectionDeps): Promise<DiscoveryPageEntry> {
-  const [artist, hook] = await Promise.all([deps.findArtistById(album.artist_id), deps.deriveHook(album.id)]);
-
+function toEntry(
+  album: AlbumRow,
+  artistsById: Map<string, ArtistRow>,
+  hooksByAlbumId: Map<string, string | null>
+): DiscoveryPageEntry {
   return {
     albumId: album.id,
     title: album.title,
-    artistName: artist?.name ?? "",
+    artistName: artistsById.get(album.artist_id)?.name ?? "",
     releaseYear: album.release_date.slice(0, 4),
     coverArtUrl: album.cover_art_url,
-    hook
+    genre: album.genre,
+    hook: hooksByAlbumId.get(album.id) ?? null
   };
 }
 
@@ -38,7 +42,16 @@ export async function buildDiscoveryPage(deps: CollectionDeps): Promise<Discover
     return { state: "empty" };
   }
 
-  const collection = await Promise.all(albums.map((album) => toEntry(album, deps)));
+  const artistIds = Array.from(new Set(albums.map((album) => album.artist_id)));
+  const albumIds = albums.map((album) => album.id);
+
+  const [artists, hooksByAlbumId] = await Promise.all([
+    deps.findArtistsByIds(artistIds),
+    deps.deriveHooksBatch(albumIds)
+  ]);
+  const artistsById = new Map(artists.map((artist) => [artist.id, artist]));
+
+  const collection = albums.map((album) => toEntry(album, artistsById, hooksByAlbumId));
 
   return { state: "ready", featured: collection[0], collection };
 }

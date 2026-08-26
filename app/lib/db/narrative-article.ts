@@ -128,6 +128,41 @@ export function createNarrativeArticleRepository(supabase: SupabaseLike) {
       return data;
     },
 
+    async findPublishedByAlbumIdsAndFacets(
+      albumIds: string[],
+      facets: NarrativeFacet[]
+    ): Promise<NarrativeArticleRow[]> {
+      if (albumIds.length === 0) {
+        return [];
+      }
+      const { data } = await supabase
+        .from<NarrativeArticleRow>("narrative_articles")
+        .select("*")
+        .in("album_id", albumIds)
+        .in("facet", facets)
+        .eq("status", "published");
+      return data ?? [];
+    },
+
+    async findFirstStatementTextByArticleIds(articleIds: string[]): Promise<Map<string, string>> {
+      if (articleIds.length === 0) {
+        return new Map();
+      }
+      const { data } = await supabase
+        .from<{ narrative_article_id: string; text: string; order: number }>("narrative_statements")
+        .select("*")
+        .in("narrative_article_id", articleIds)
+        .order("order", { ascending: true });
+
+      const firstTextByArticleId = new Map<string, string>();
+      for (const row of data ?? []) {
+        if (!firstTextByArticleId.has(row.narrative_article_id)) {
+          firstTextByArticleId.set(row.narrative_article_id, row.text);
+        }
+      }
+      return firstTextByArticleId;
+    },
+
     async findStatementsByArticleId(articleId: string): Promise<NarrativeStatement[]> {
       const { data: statementRows } = await supabase
         .from<{ id: string; text: string; kind: NarrativeStatement["kind"] }>("narrative_statements")

@@ -19,7 +19,7 @@ export async function findSameEraAlbumsForProduction(
 ) {
   const allAlbums = await albumRepo.findAllAlbums();
   const candidates = allAlbums.map((a) => ({ id: a.id, releaseDate: new Date(a.release_date) }));
-  const sameEra = findSameEraAlbums({ id: album.id, releaseDate: new Date(album.release_date) }, candidates);
+  const sameEra = findSameEraAlbums({ id: album.id, releaseDate: new Date(album.release_date) }, candidates, 0);
   const matchedAlbums = allAlbums.filter((a) => sameEra.some((s) => s.id === a.id));
 
   return Promise.all(

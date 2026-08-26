@@ -89,11 +89,36 @@ describe("buildYearPage", () => {
     }
   });
 
+  it("interleaves albums and historical events into a single chronological timeline", async () => {
+    const deps = buildDeps({
+      findAlbumsByReleaseYear: vi.fn().mockResolvedValue([album({ release_date: "1989-09-19" })]),
+      findArtistById: vi.fn().mockResolvedValue({ id: "artist-1", name: "Janet Jackson" }),
+      findHistoricalEvents: vi.fn().mockImplementation((date: string) =>
+        Promise.resolve(
+          date === "1989-03-01"
+            ? [{ title: "Massacre da Praça Tiananmen", date: "1989-06-04" }]
+            : [{ title: "Queda do Muro de Berlim", date: "1989-11-09" }]
+        )
+      )
+    });
+
+    const result = await buildYearPage("1989", deps as never);
+
+    expect(result.state).toBe("ready");
+    if (result.state === "ready") {
+      expect(result.timeline.map((item) => (item.kind === "event" ? item.title : item.album.title))).toEqual([
+        "Massacre da Praça Tiananmen",
+        "Rhythm Nation 1814",
+        "Queda do Muro de Berlim"
+      ]);
+    }
+  });
+
   it("returns an empty album list and empty events for a valid year with nothing on record", async () => {
     const deps = buildDeps();
 
     const result = await buildYearPage("1901", deps as never);
 
-    expect(result).toEqual({ state: "ready", year: "1901", albums: [], historicalEvents: [] });
+    expect(result).toEqual({ state: "ready", year: "1901", albums: [], historicalEvents: [], timeline: [] });
   });
 });

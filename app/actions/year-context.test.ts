@@ -7,13 +7,27 @@ vi.mock("../lib/supabase/server.js", () => ({
   createSupabaseServerClient: vi.fn().mockResolvedValue({})
 }));
 
+vi.mock("../lib/auth", () => ({
+  getCurrentIsAdmin: vi.fn().mockResolvedValue(false)
+}));
+
 describe("getYearContext", () => {
   it("returns the ready state built by the year aggregation", async () => {
     vi.spyOn(yearModule, "buildYearPage").mockResolvedValue({
       state: "ready",
       year: "1986",
-      albums: [{ albumId: "album-1", title: "Control", artistName: "Janet Jackson", releaseYear: "1986", hook: null }],
-      historicalEvents: [{ title: "Desastre do Challenger", date: "1986-01-28" }]
+      albums: [
+        {
+          albumId: "album-1",
+          title: "Control",
+          artistName: "Janet Jackson",
+          releaseYear: "1986",
+          releaseDate: "1986-02-04",
+          hook: null
+        }
+      ],
+      historicalEvents: [{ title: "Desastre do Challenger", date: "1986-01-28" }],
+      timeline: []
     });
 
     const result = await getYearContext("1986");

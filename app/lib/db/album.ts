@@ -85,7 +85,8 @@ export function createAlbumRepository(supabase: SupabaseLike) {
       const { data } = await supabase
         .from<AlbumRow>("albums")
         .select("*")
-        .ilike("release_date", `${year}%`)
+        .gte("release_date", `${year}-01-01`)
+        .lte("release_date", `${year}-12-31`)
         .order("release_date", { ascending: true });
       return data ?? [];
     },
@@ -142,6 +143,14 @@ export function createAlbumRepository(supabase: SupabaseLike) {
     async findArtistById(id: string): Promise<ArtistRow | null> {
       const { data } = await supabase.from<ArtistRow>("artists").select("*").eq("id", id).maybeSingle();
       return data;
+    },
+
+    async findArtistsByIds(ids: string[]): Promise<ArtistRow[]> {
+      if (ids.length === 0) {
+        return [];
+      }
+      const { data } = await supabase.from<ArtistRow>("artists").select("*").in("id", ids);
+      return data ?? [];
     },
 
     async findArtistByName(name: string): Promise<ArtistRow | null> {

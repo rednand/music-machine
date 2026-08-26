@@ -121,4 +121,54 @@ describe("NarrativeArticleRepository state machine", () => {
 
     expect(found).toEqual(expect.objectContaining({ album_id: "album-4", facet: "reception_vs_legacy" }));
   });
+
+  it("finds published articles across many albums and facets in one batched call", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    const summaryArticle = await repo.createPending("album-7", "album_summary");
+    await repo.publish(summaryArticle.id, [{ text: "Resumo.", kind: "fact", order: 0, sourceIds: [] }]);
+    const pendingArticle = await repo.createPending("album-8", "artist_moment");
+    await repo.createPending("album-9", "world_context");
+
+    const results = await repo.findPublishedByAlbumIdsAndFacets(
+      ["album-7", "album-8", "album-9"],
+      ["album_summary", "artist_moment"]
+    );
+
+    expect(results).toEqual([expect.objectContaining({ album_id: "album-7", facet: "album_summary" })]);
+    expect(results.map((article) => article.id)).not.toContain(pendingArticle.id);
+  });
+
+  it("returns an empty array without querying when given no album ids", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    expect(await repo.findPublishedByAlbumIdsAndFacets([], ["album_summary"])).toEqual([]);
+  });
+
+  it("finds only the first statement per article across many articles in one batched call", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    const first = await repo.createPending("album-10", "album_summary");
+    await repo.publish(first.id, [
+      { text: "Primeira frase.", kind: "fact", order: 0, sourceIds: [] },
+      { text: "Segunda frase.", kind: "fact", order: 1, sourceIds: [] }
+    ]);
+    const second = await repo.createPending("album-11", "album_summary");
+    await repo.publish(second.id, [{ text: "Outra frase.", kind: "fact", order: 0, sourceIds: [] }]);
+
+    const firstTextByArticleId = await repo.findFirstStatementTextByArticleIds([first.id, second.id]);
+
+    expect(firstTextByArticleId.get(first.id)).toBe("Primeira frase.");
+    expect(firstTextByArticleId.get(second.id)).toBe("Outra frase.");
+  });
+
+  it("returns an empty map without querying when given no article ids", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createNarrativeArticleRepository(supabase as never);
+
+    expect(await repo.findFirstStatementTextByArticleIds([])).toEqual(new Map());
+  });
 });

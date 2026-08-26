@@ -58,7 +58,7 @@ describe("DiscoverPage", () => {
     const { container } = render(element);
 
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent(/Disco em contexto/i);
+    expect(heading).toHaveTextContent(/Discontexto/i);
     expect(container.querySelector('img[src="/logo-disco-relogio.svg"]')).toBeInTheDocument();
     expect(screen.getByRole("searchbox")).toBeInTheDocument();
   });

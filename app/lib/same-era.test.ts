@@ -4,18 +4,19 @@ import { findSameEraAlbums, isSameEra } from "./same-era";
 const control = { id: "control", releaseDate: new Date("1986-02-04") };
 
 describe("isSameEra", () => {
-  it("returns true for releases within the default ±2 year window", () => {
+  it("returns true for releases within the default ±1 calendar year window", () => {
     expect(isSameEra(control.releaseDate, new Date("1987-06-01"))).toBe(true);
     expect(isSameEra(control.releaseDate, new Date("1985-03-01"))).toBe(true);
   });
 
   it("returns false for releases outside the window", () => {
+    expect(isSameEra(control.releaseDate, new Date("1988-01-01"))).toBe(false);
     expect(isSameEra(control.releaseDate, new Date("1995-01-01"))).toBe(false);
   });
 
-  it("respects a custom window in years", () => {
-    expect(isSameEra(control.releaseDate, new Date("1986-08-01"), 0.5)).toBe(true);
-    expect(isSameEra(control.releaseDate, new Date("1988-01-01"), 0.5)).toBe(false);
+  it("respects a custom window in calendar years", () => {
+    expect(isSameEra(control.releaseDate, new Date("1986-08-01"), 0)).toBe(true);
+    expect(isSameEra(control.releaseDate, new Date("1987-01-01"), 0)).toBe(false);
   });
 });
 

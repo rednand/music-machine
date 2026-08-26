@@ -6,7 +6,7 @@ export default async function YearsIndexPage() {
   const result = await getDiscoveryPage();
   const years =
     result.state === "ready"
-      ? Array.from(new Set(result.collection.map((entry) => entry.releaseYear))).sort((a, b) => Number(b) - Number(a))
+      ? Array.from(new Set(result.collection.map((entry) => entry.releaseYear))).sort((a, b) => Number(a) - Number(b))
       : [];
 
   return (

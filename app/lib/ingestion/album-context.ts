@@ -13,7 +13,7 @@ import { validateStatements } from "../ai/publishing-gate";
 import { synthesizeCuriosities, synthesizeInfluence, type GeneratedFactItem } from "../ai/curiosity-influence";
 import type { IngestedAlbum } from "./ingest-album";
 import type { ProviderSourceRef, RawCreditData, RawPerformanceRecordData, RawTrackData } from "../providers/provider.interface";
-import { deriveAlbumHook } from "../discovery/hook";
+import { deriveAlbumHook, deriveAlbumFullHook } from "../discovery/hook";
 
 const FACETS: NarrativeFacet[] = ["artist_moment", "world_context", "musical_scene", "reception_vs_legacy"];
 const SUMMARY_FACET: NarrativeFacet = "album_summary";
@@ -515,12 +515,15 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
     }
   }
 
-  const hook = await deriveAlbumHook(albumId, deps.narrativeArticles);
+  const [hook, briefHook] = await Promise.all([
+    deriveAlbumFullHook(albumId, deps.narrativeArticles),
+    deriveAlbumHook(albumId, deps.narrativeArticles)
+  ]);
 
   const localEntries: OtherAlbumEntry[] = await Promise.all(
     artistAlbums.map(async (a) => {
       const isCurrent = a.id === album.id;
-      const description = isCurrent ? hook : await deriveAlbumHook(a.id, deps.narrativeArticles);
+      const description = isCurrent ? briefHook : await deriveAlbumHook(a.id, deps.narrativeArticles);
       return { albumId: a.id, title: a.title, releaseYear: a.release_date.slice(0, 4), isCurrent, description };
     })
   );

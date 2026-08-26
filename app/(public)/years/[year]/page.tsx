@@ -16,7 +16,7 @@ export default async function YearPage({ params }: { params: Promise<{ year: str
         href="/"
         className="mb-8 inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.22em] text-[#6b6577] transition-colors hover:text-[#d1145a]"
       >
-        ← ACERVO
+        ← HOME
       </Link>
 
       <h1 className="font-heading text-[clamp(30px,3.4vw,50px)] font-extrabold tracking-[-0.03em] text-[#120f18]">

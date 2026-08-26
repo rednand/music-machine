@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deriveAlbumHook } from "./hook";
+import { deriveAlbumFullHook, deriveAlbumHook, deriveAlbumHooksBatch } from "./hook";
 
 describe("deriveAlbumHook", () => {
   it("prefers the first published album_summary statement", async () => {
@@ -121,5 +121,77 @@ describe("deriveAlbumHook", () => {
     const hook = await deriveAlbumHook("album-1", deps);
 
     expect(hook).toBe(`${"a".repeat(140)}…`);
+  });
+});
+
+describe("deriveAlbumFullHook", () => {
+  it("returns the full statement text without truncating it, unlike deriveAlbumHook", async () => {
+    const longText = "a".repeat(150);
+    const deps = {
+      findByAlbumAndFacet: vi.fn().mockResolvedValue({ id: "article-1", status: "published" }),
+      findStatementsByArticleId: vi.fn().mockResolvedValue([{ text: longText, kind: "fact", sourceIds: [] }])
+    };
+
+    expect(await deriveAlbumFullHook("album-1", deps)).toBe(longText);
+    expect(await deriveAlbumHook("album-1", deps)).not.toBe(longText);
+  });
+
+  it("returns null when none of the preferred facets has a published statement", async () => {
+    const deps = {
+      findByAlbumAndFacet: vi.fn().mockResolvedValue(null),
+      findStatementsByArticleId: vi.fn()
+    };
+
+    expect(await deriveAlbumFullHook("album-1", deps)).toBeNull();
+  });
+});
+
+describe("deriveAlbumHooksBatch", () => {
+  it("picks the highest-preference published facet per album from a single batched fetch", async () => {
+    const deps = {
+      findPublishedByAlbumIdsAndFacets: vi.fn().mockResolvedValue([
+        { id: "article-1", album_id: "album-1", facet: "reception_vs_legacy" },
+        { id: "article-2", album_id: "album-1", facet: "album_summary" },
+        { id: "article-3", album_id: "album-2", facet: "artist_moment" }
+      ]),
+      findFirstStatementTextByArticleIds: vi.fn().mockResolvedValue(
+        new Map([
+          ["article-2", "Resumo do álbum 1."],
+          ["article-3", "Momento do artista do álbum 2."]
+        ])
+      )
+    };
+
+    const hooks = await deriveAlbumHooksBatch(["album-1", "album-2"], deps);
+
+    expect(hooks.get("album-1")).toBe("Resumo do álbum 1.");
+    expect(hooks.get("album-2")).toBe("Momento do artista do álbum 2.");
+    expect(deps.findPublishedByAlbumIdsAndFacets).toHaveBeenCalledTimes(1);
+    expect(deps.findFirstStatementTextByArticleIds).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null for albums with no published article, without querying statements for them", async () => {
+    const deps = {
+      findPublishedByAlbumIdsAndFacets: vi.fn().mockResolvedValue([]),
+      findFirstStatementTextByArticleIds: vi.fn().mockResolvedValue(new Map())
+    };
+
+    const hooks = await deriveAlbumHooksBatch(["album-1", "album-2"], deps);
+
+    expect(hooks.get("album-1")).toBeNull();
+    expect(hooks.get("album-2")).toBeNull();
+    expect(deps.findFirstStatementTextByArticleIds).toHaveBeenCalledWith([]);
+  });
+
+  it("short-circuits without any queries when there are no albums", async () => {
+    const deps = {
+      findPublishedByAlbumIdsAndFacets: vi.fn(),
+      findFirstStatementTextByArticleIds: vi.fn()
+    };
+
+    const hooks = await deriveAlbumHooksBatch([], deps);
+
+    expect(hooks.size).toBe(0);
+    expect(deps.findPublishedByAlbumIdsAndFacets).not.toHaveBeenCalled();
   });
 });

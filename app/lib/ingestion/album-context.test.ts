@@ -331,6 +331,29 @@ describe("assembleTechnicalSheet", () => {
     }
   });
 
+  it("does not truncate the header's hook, unlike the brief description used in the artist timeline", async () => {
+    const longText =
+      "Dawn Of Chromatica transforma a festa pop de Chromatica em um playground underground, celebrando a criatividade emergente de produtores e DJs.";
+    const deps = buildDeps({
+      narrativeArticles: {
+        findByAlbumAndFacet: vi.fn().mockImplementation((_albumId: string, facet: string) => Promise.resolve(publishedArticle(facet))),
+        findStatementsByArticleId: vi.fn().mockResolvedValue([{ text: longText, kind: "fact", sourceIds: ["source-1"] }]),
+        createPending: vi.fn(),
+        publish: vi.fn(),
+        markFailedValidation: vi.fn()
+      }
+    });
+
+    const result = await assembleTechnicalSheet("album-1", deps as never);
+
+    expect(result.state).toBe("ready");
+    if (result.state === "ready") {
+      expect(result.body.header.hook).toBe(longText);
+      const currentEntry = result.body.otherAlbumsByArtist.find((entry) => entry.isCurrent);
+      expect(currentEntry?.description?.length).toBeLessThan(longText.length);
+    }
+  });
+
   it("derives and persists fresh recommendations when none exist yet", async () => {
     const trueBlue = { id: "album-2", title: "True Blue", releaseDate: new Date("1986-06-30"), genre: "Pop" };
     const deps = buildDeps({

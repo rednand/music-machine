@@ -202,6 +202,26 @@ describe("AlbumRepository", () => {
     expect(await repo.findArtistByName("Nobody")).toBeNull();
   });
 
+  it("finds multiple artists by id in a single batched call", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createAlbumRepository(supabase as never);
+
+    const madonna = await repo.createArtist({ name: "Madonna", slug: "madonna" });
+    const prince = await repo.createArtist({ name: "Prince", slug: "prince" });
+    await repo.createArtist({ name: "Not requested", slug: "not-requested" });
+
+    const results = await repo.findArtistsByIds([madonna.id as string, prince.id as string]);
+
+    expect(results.map((artist) => artist.name).sort()).toEqual(["Madonna", "Prince"]);
+  });
+
+  it("returns an empty array without querying when given no ids", async () => {
+    const supabase = createFakeSupabase({});
+    const repo = createAlbumRepository(supabase as never);
+
+    expect(await repo.findArtistsByIds([])).toEqual([]);
+  });
+
   it("finds an album by its exact slug", async () => {
     const supabase = createFakeSupabase({});
     const repo = createAlbumRepository(supabase as never);

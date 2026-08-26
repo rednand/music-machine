@@ -145,6 +145,14 @@ export function createAlbumRepository(supabase: SupabaseLike) {
       return data;
     },
 
+    async findArtistsByIds(ids: string[]): Promise<ArtistRow[]> {
+      if (ids.length === 0) {
+        return [];
+      }
+      const { data } = await supabase.from<ArtistRow>("artists").select("*").in("id", ids);
+      return data ?? [];
+    },
+
     async findArtistByName(name: string): Promise<ArtistRow | null> {
       const { data } = await supabase.from<ArtistRow>("artists").select("*").eq("name", name).maybeSingle();
       return data;

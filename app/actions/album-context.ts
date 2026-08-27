@@ -13,6 +13,7 @@ import { createInfluenceRepository } from "../lib/db/influence";
 import { createNarrativeArticleRepository } from "../lib/db/narrative-article";
 import { createRecommendationRepository } from "../lib/db/recommendation";
 import { createDiscographyCacheRepository } from "../lib/db/discography-cache";
+import { createListPlacementRepository } from "../lib/db/list-placement";
 import { toSupabaseLike } from "../lib/db/supabase-like";
 import { GroqClient } from "../lib/ai/client";
 import { GeminiClient } from "../lib/ai/gemini-client";
@@ -69,7 +70,8 @@ const TRACED_DEP_KEYS: (keyof AlbumContextDeps)[] = [
   "findArtistDiscography",
   "ingestAlbum",
   "findRecommendationCandidates",
-  "findDirectlyInfluencedAlbumIds"
+  "findDirectlyInfluencedAlbumIds",
+  "findListPlacements"
 ];
 
 async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
@@ -87,6 +89,7 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
   const narrativeArticles = createNarrativeArticleRepository(admin);
   const recommendationRepo = createRecommendationRepository(admin);
   const discographyCacheRepo = createDiscographyCacheRepository(admin);
+  const listPlacementRepo = createListPlacementRepository(supabase);
   const sourceResolutionCache = new Map<string, Promise<string>>();
 
   const groqSdkClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -161,6 +164,9 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
       return new Set(influences.map((i) => i.to_album_id).filter((id): id is string => Boolean(id)));
     },
     recommendations: recommendationRepo,
+    findListPlacements: (artistName, albumTitle) => listPlacementRepo.findByAlbum(artistName, albumTitle).then((rows) =>
+      rows.map((row) => ({ listName: row.list_name, position: row.position }))
+    ),
     dedupeNarrativeTrigger: (albumId) =>
       narrativeTriggerLimiter.checkAndIncrement(`narrative-trigger:${albumId}`, { maxRequests: 1, windowSeconds: 300 })
         .allowed,

@@ -69,6 +69,7 @@ function buildDeps(overrides: Partial<Record<string, unknown>> = {}) {
       findBySubjectAlbumId: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockImplementation((input) => Promise.resolve({ id: "rec-1", ...input }))
     },
+    findListPlacements: vi.fn().mockResolvedValue([]),
     dedupeNarrativeTrigger: vi.fn().mockReturnValue(true),
     scheduleBackgroundWork: vi.fn(),
     ...overrides
@@ -391,6 +392,33 @@ describe("assembleTechnicalSheet", () => {
     }
   });
 
+  it("includes the list placements found for the album's artist and title", async () => {
+    const deps = buildDeps({
+      findListPlacements: vi.fn().mockResolvedValue([
+        { listName: "Rolling Stone's 500 Greatest Albums of All Time", position: 78 }
+      ])
+    });
+
+    const result = await assembleTechnicalSheet("album-1", deps as never);
+
+    expect(deps.findListPlacements).toHaveBeenCalledWith("Janet Jackson", "Control");
+    if (result.state === "ready") {
+      expect(result.body.listPlacements).toEqual([
+        { listName: "Rolling Stone's 500 Greatest Albums of All Time", position: 78 }
+      ]);
+    }
+  });
+
+  it("returns an empty list-placements array when the album is on no list", async () => {
+    const deps = buildDeps();
+
+    const result = await assembleTechnicalSheet("album-1", deps as never);
+
+    if (result.state === "ready") {
+      expect(result.body.listPlacements).toEqual([]);
+    }
+  });
+
   describe("narrative generation triggering", () => {
     it("does not schedule narrative generation when every facet is already resolved", async () => {
       const deps = buildDeps();
@@ -531,6 +559,59 @@ describe("narrative generation (scheduled background work)", () => {
 
     expect(deps.gptClient.complete).toHaveBeenCalledTimes(8);
     expect(deps.narrativeArticles.publish).toHaveBeenCalledTimes(5);
+  });
+
+  it("marks every facet as failed_validation instead of leaving them stuck when generation crashes before publishing anything", async () => {
+    const createPending = vi.fn().mockImplementation((_albumId, facet) => Promise.resolve({ id: `new-${facet}`, facet, status: "pending" }));
+    const markFailedValidation = vi.fn();
+    const deps = buildDeps({
+      narrativeArticles: {
+        findByAlbumAndFacet: vi.fn().mockResolvedValue(null),
+        findStatementsByArticleId: vi.fn(),
+        createPending,
+        publish: vi.fn(),
+        markFailedValidation
+      },
+      findTracks: vi.fn().mockResolvedValue([{ id: "t1", album_id: "album-1", title: "Track", track_number: 1 }]),
+      ingestAlbum: vi.fn().mockRejectedValue(new Error("catalog api down"))
+    });
+
+    await assembleTechnicalSheet("album-1", deps as never);
+    await runScheduledWork(deps);
+
+    expect(createPending).toHaveBeenCalledTimes(5);
+    expect(markFailedValidation).toHaveBeenCalledTimes(5);
+    for (const facet of ["artist_moment", "world_context", "musical_scene", "reception_vs_legacy", "album_summary"]) {
+      expect(createPending).toHaveBeenCalledWith("album-1", facet);
+    }
+  });
+
+  it("does not touch a facet that was already published in an earlier run when a fresh generation attempt crashes", async () => {
+    const createPending = vi.fn().mockImplementation((_albumId, facet) => Promise.resolve({ id: `new-${facet}`, facet, status: "pending" }));
+    const markFailedValidation = vi.fn();
+    const deps = buildDeps({
+      narrativeArticles: {
+        findByAlbumAndFacet: vi
+          .fn()
+          .mockImplementation((_albumId, facet) =>
+            Promise.resolve(facet === "artist_moment" ? { id: "existing-artist-moment", status: "published" } : null)
+          ),
+        findStatementsByArticleId: vi.fn().mockResolvedValue([]),
+        createPending,
+        publish: vi.fn(),
+        markFailedValidation
+      },
+      findTracks: vi.fn().mockResolvedValue([{ id: "t1", album_id: "album-1", title: "Track", track_number: 1 }]),
+      ingestAlbum: vi.fn().mockRejectedValue(new Error("catalog api down"))
+    });
+
+    await assembleTechnicalSheet("album-1", deps as never);
+    await runScheduledWork(deps);
+
+    expect(createPending).not.toHaveBeenCalledWith("album-1", "artist_moment");
+    expect(markFailedValidation).not.toHaveBeenCalledWith("existing-artist-moment");
+    expect(createPending).toHaveBeenCalledTimes(4);
+    expect(markFailedValidation).toHaveBeenCalledTimes(4);
   });
 
   it("marks a failed-to-generate facet as failed_validation instead of crashing or publishing empty content", async () => {

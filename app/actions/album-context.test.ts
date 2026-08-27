@@ -33,7 +33,8 @@ describe("getAlbumTechnicalSheet", () => {
         otherAlbumsByArtist: [],
         sameEraAlbums: [],
         performance: null,
-        recommendations: []
+        recommendations: [],
+        listPlacements: []
       }
     });
 

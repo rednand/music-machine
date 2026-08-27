@@ -104,6 +104,32 @@ describe("NarrativeSections", () => {
     expect(albumContextAction.getAlbumNarrative).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps polling after a failed request instead of stalling forever", async () => {
+    vi.mocked(albumContextAction.getAlbumNarrative)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ state: "ready", body: readyBody });
+
+    render(
+      <NarrativeSections
+        albumId="album-1"
+        initial={{ state: "in_progress" }}
+        year="1986"
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3007);
+    });
+    expect(albumContextAction.getAlbumNarrative).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Momento do artista.")).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3007);
+    });
+    expect(albumContextAction.getAlbumNarrative).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Momento do artista.")).toBeInTheDocument();
+  });
+
   it("renders a per-section error state when the whole narrative fetch failed", () => {
     render(
       <NarrativeSections

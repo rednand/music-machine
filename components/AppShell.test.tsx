@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("AppShell", () => {
-  it("renders navigation links to Acervo and Eras only, with no Linhas destination", async () => {
+  it("renders navigation links to Home, Acervo, Eras, and Sorteio only, with no Linhas destination", async () => {
     const { AppShell } = await import("./AppShell.js");
 
     render(
@@ -15,13 +15,19 @@ describe("AppShell", () => {
       </AppShell>
     );
 
-    const acervoLinks = screen.getAllByRole("link", { name: /acervo/i });
-    const erasLinks = screen.getAllByRole("link", { name: /eras/i });
+    const homeLinks = screen.getAllByRole("link", { name: /^home$/i });
+    const acervoLinks = screen.getAllByRole("link", { name: /^acervo$/i });
+    const erasLinks = screen.getAllByRole("link", { name: /^eras$/i });
+    const sorteioLinks = screen.getAllByRole("link", { name: /^sorteio$/i });
 
+    expect(homeLinks.length).toBeGreaterThan(0);
+    expect(homeLinks[0]).toHaveAttribute("href", "/");
     expect(acervoLinks.length).toBeGreaterThan(0);
-    expect(acervoLinks[0]).toHaveAttribute("href", "/");
+    expect(acervoLinks[0]).toHaveAttribute("href", "/acervo");
     expect(erasLinks.length).toBeGreaterThan(0);
     expect(erasLinks[0]).toHaveAttribute("href", "/years");
+    expect(sorteioLinks.length).toBeGreaterThan(0);
+    expect(sorteioLinks[0]).toHaveAttribute("href", "/sorteio");
     expect(screen.queryByRole("link", { name: /linhas/i })).not.toBeInTheDocument();
     expect(screen.getByText("conteúdo")).toBeInTheDocument();
   });

@@ -7,6 +7,7 @@ import { AlbumTabs } from "@/components/AlbumTabs";
 import { AlbumInfoCards } from "@/components/AlbumInfoCards";
 import { TrackList } from "@/components/TrackList";
 import { CreditsList } from "@/components/CreditsList";
+import { ListsSection } from "@/components/ListsSection";
 import { MusicalSceneGrid } from "@/components/MusicalSceneGrid";
 import { SectionCard } from "@/components/SectionCard";
 import { PerformancePanel } from "@/components/PerformancePanel";
@@ -81,6 +82,8 @@ export default async function AlbumPage({
           </div>
           <CreditsList credits={body.credits} />
         </SectionCard>
+
+        <ListsSection placements={body.listPlacements} />
 
         <NarrativeSections albumId={albumId} initial={narrative} year={year}>
           <div id="cenario">

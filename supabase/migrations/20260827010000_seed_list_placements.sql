@@ -1,6 +1,6 @@
 -- Popula a tabela list_placements com as posicoes de albuns em listas de "melhores albuns"
 -- ja levantadas para o projeto (Rolling Stone, NME, Pitchfork por decada, Apple Music, MOJO).
--- Gerado a partir dos arquivos *.md na raiz do projeto.
+-- Gerado a partir dos arquivos *.md em mds/.
 
 insert into list_placements (list_slug, list_name, position, artist_name, album_title, normalized_artist, normalized_title)
 values

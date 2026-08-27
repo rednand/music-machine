@@ -7,8 +7,10 @@ import { AdminDebugPanel } from "@/components/AdminDebugPanel";
 import { signOut } from "@/app/actions/auth";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Acervo" },
-  { href: "/years", label: "Eras" }
+  { href: "/", label: "Home" },
+  { href: "/acervo", label: "Acervo" },
+  { href: "/years", label: "Eras" },
+  { href: "/sorteio", label: "Sorteio" }
 ];
 
 export function AppShell({ children, isAdmin = false }: { children: React.ReactNode; isAdmin?: boolean }) {
@@ -40,11 +42,11 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
 
         <Link
           href="/"
-          aria-label="Acervo"
+          aria-label="Home"
           className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full shadow-[0_8px_20px_-8px_rgba(209,20,90,0.6)]"
-          style={{ background: "linear-gradient(150deg, #ff7fae, #d1145a)" }}
         >
-          <span className="h-3 w-3 rounded-full border-2 border-white/95" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-disco-relogio.svg" alt="" aria-hidden="true" className="h-full w-full" />
         </Link>
 
         <nav className="relative flex flex-col items-center gap-8 font-mono text-[9.5px] tracking-[0.26em]">

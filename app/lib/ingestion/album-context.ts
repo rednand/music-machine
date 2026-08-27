@@ -64,6 +64,7 @@ export interface AlbumContextDeps {
   findRecommendationCandidates(albumId: string): Promise<RecommendationCandidateAlbum[]>;
   findDirectlyInfluencedAlbumIds(albumId: string): Promise<Set<string>>;
   recommendations: Pick<RecommendationRepository, "findBySubjectAlbumId" | "create">;
+  findListPlacements(artistName: string, albumTitle: string): Promise<ListPlacementEntry[]>;
   dedupeNarrativeTrigger(albumId: string): boolean;
   scheduleBackgroundWork(run: () => Promise<void>): void;
 }
@@ -122,6 +123,11 @@ export interface RecommendationEntry {
   explanation: string;
 }
 
+export interface ListPlacementEntry {
+  listName: string;
+  position: number;
+}
+
 export interface TechnicalSheetBody {
   header: AlbumContextHeader;
   tracks: TrackRow[];
@@ -130,6 +136,7 @@ export interface TechnicalSheetBody {
   sameEraAlbums: SameEraAlbumRef[];
   performance: PerformanceRecordRow[] | null;
   recommendations: RecommendationEntry[];
+  listPlacements: ListPlacementEntry[];
 }
 
 export type TechnicalSheetResult =
@@ -237,6 +244,23 @@ async function publishFacet(
   return facetResult.statements;
 }
 
+async function markFacetFailedIfUnresolved(
+  facet: NarrativeFacet,
+  existing: { id: string; status: string } | null,
+  albumId: string,
+  deps: AlbumContextDeps
+): Promise<void> {
+  if (isResolved(existing)) {
+    return;
+  }
+  try {
+    const article = existing ?? (await deps.narrativeArticles.createPending(albumId, facet));
+    await deps.narrativeArticles.markFailedValidation(article.id);
+  } catch (error) {
+    console.error(`Failed to mark facet ${facet} as failed for album ${albumId}`, error);
+  }
+}
+
 async function generateNarrative(
   album: AlbumRow,
   artist: ArtistRow | null,
@@ -337,6 +361,10 @@ async function generateNarrative(
     );
   } catch (error) {
     console.error(`Failed to generate narrative for album ${album.id}`, error);
+    await Promise.all([
+      ...FACETS.map((facet, index) => markFacetFailedIfUnresolved(facet, existingArticles[index], album.id, deps)),
+      markFacetFailedIfUnresolved(SUMMARY_FACET, existingSummaryArticle, album.id, deps)
+    ]);
   }
 }
 
@@ -470,9 +498,10 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
   let recommendationRows: RecommendationRow[];
   let sameEraAlbums: SameEraAlbumRef[];
   let discography: DiscographyEntry[];
+  let listPlacements: ListPlacementEntry[];
 
   try {
-    [existingTracks, existingCredits, artistAlbums, existingPerformance, recommendationRows, sameEraAlbums, discography] =
+    [existingTracks, existingCredits, artistAlbums, existingPerformance, recommendationRows, sameEraAlbums, discography, listPlacements] =
       await Promise.all([
         deps.findTracks(albumId),
         deps.findCredits(albumId),
@@ -480,7 +509,8 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
         deps.findPerformanceRecords(albumId),
         resolveRecommendations(album, deps),
         deps.findSameEraAlbums(album),
-        artist ? deps.findArtistDiscography(artist) : Promise.resolve([])
+        artist ? deps.findArtistDiscography(artist) : Promise.resolve([]),
+        deps.findListPlacements(artist?.name ?? "", album.title)
       ]);
   } catch (error) {
     console.error(`Failed to load existing technical sheet data for album ${albumId}`, error);
@@ -567,7 +597,8 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
       otherAlbumsByArtist,
       sameEraAlbums,
       performance: performance.length > 0 ? performance : null,
-      recommendations
+      recommendations,
+      listPlacements
     }
   };
 }

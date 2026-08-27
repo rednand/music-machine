@@ -29,6 +29,7 @@ const readyTechnicalBody = {
   ],
   sameEraAlbums: [],
   performance: null,
+  listPlacements: [],
   recommendations: [
     {
       id: "r1",
@@ -97,6 +98,34 @@ describe("AlbumPage", () => {
     expect(screen.getByText("True Blue")).toBeInTheDocument();
     expect(screen.getByText("Madonna")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /rhythm nation 1814/i })).toHaveAttribute("href", "/albums/album-2");
+  });
+
+  it("shows the Listas section with each list name and position when the album is on at least one list", async () => {
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({
+      state: "ready",
+      body: {
+        ...readyTechnicalBody,
+        listPlacements: [{ listName: "Rolling Stone's 500 Greatest Albums of All Time", position: 78 }]
+      }
+    });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
+
+    const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
+    render(element);
+
+    expect(screen.getByRole("heading", { name: "Listas" })).toBeInTheDocument();
+    expect(screen.getByText("Rolling Stone's 500 Greatest Albums of All Time")).toBeInTheDocument();
+    expect(screen.getByText("#78")).toBeInTheDocument();
+  });
+
+  it("hides the Listas section entirely when the album is on no list", async () => {
+    vi.spyOn(albumContextAction, "getAlbumTechnicalSheet").mockResolvedValue({ state: "ready", body: readyTechnicalBody });
+    vi.spyOn(albumContextAction, "getAlbumNarrative").mockResolvedValue({ state: "ready", body: readyNarrativeBody });
+
+    const element = await AlbumPage({ params: Promise.resolve({ albumId: "album-1" }), searchParams: Promise.resolve({}) });
+    render(element);
+
+    expect(screen.queryByRole("heading", { name: "Listas" })).not.toBeInTheDocument();
   });
 
   it("renders the technical sheet immediately with loading placeholders while narrative is not started", async () => {

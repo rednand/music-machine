@@ -48,23 +48,35 @@ export function NarrativeSections({
   const [result, setResult] = useState<NarrativeResult>(initial);
 
   useEffect(() => {
-    if (result.state !== "not_started" && result.state !== "in_progress") {
-      return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      try {
+        const next = await getAlbumNarrative(albumId);
+        if (cancelled) {
+          return;
+        }
+        setResult(next);
+        if (next.state === "not_started" || next.state === "in_progress") {
+          timer = setTimeout(poll, POLL_INTERVAL_MS);
+        }
+      } catch {
+        if (!cancelled) {
+          timer = setTimeout(poll, POLL_INTERVAL_MS);
+        }
+      }
     }
 
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      const next = await getAlbumNarrative(albumId);
-      if (!cancelled) {
-        setResult(next);
-      }
-    }, POLL_INTERVAL_MS);
+    if (result.state === "not_started" || result.state === "in_progress") {
+      timer = setTimeout(poll, POLL_INTERVAL_MS);
+    }
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [albumId, result]);
+  }, [albumId]);
 
   const isLoading =
     result.state === "not_started" || result.state === "in_progress";

@@ -1,6 +1,6 @@
 -- Popula list_placements com as posicoes de albuns nas listas da Q Magazine (2006)
--- e da Consequence (2022), gerado a partir de q-magazine-100-greatest-albums.md e
--- consequence-100-greatest-albums.md na raiz do projeto.
+-- e da Consequence (2022), gerado a partir de mds/q-magazine-100-greatest-albums.md e
+-- mds/consequence-100-greatest-albums.md.
 
 insert into list_placements (list_slug, list_name, position, artist_name, album_title, normalized_artist, normalized_title)
 values

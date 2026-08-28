@@ -14,6 +14,7 @@ interface MusicBrainzReleaseGroupSearchResponse {
 }
 
 const FULL_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const REQUEST_TIMEOUT_MS = 15000;
 
 export function buildReleaseGroupSearchUrl(query: AlbumLookupQuery): string {
   const mbQuery = `artist:${query.artistName} AND release:${query.albumTitle}`;
@@ -32,7 +33,11 @@ export class MusicBrainzProvider {
     const url = buildReleaseGroupSearchUrl(query);
 
     try {
-      const response = await cachedFetch(url, { headers: { "user-agent": this.config.userAgent } }, this.fetchImpl);
+      const response = await cachedFetch(
+        url,
+        { headers: { "user-agent": this.config.userAgent }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+        this.fetchImpl
+      );
       if (!response.ok) {
         return null;
       }

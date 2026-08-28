@@ -15,6 +15,8 @@ export class GeminiEmptyResponseError extends Error {
   }
 }
 
+const REQUEST_TIMEOUT_MS = 20000;
+
 const DEFAULT_MODELS = [
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
@@ -42,7 +44,8 @@ export class GeminiClient implements ChatCompletionClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }]
-      })
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
     if (!response.ok) {

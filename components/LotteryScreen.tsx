@@ -68,6 +68,8 @@ export function LotteryScreen({ pool }: { pool: LotteryEntry[] }) {
         return;
       }
       router.push(`/albums/${outcome.albumId}`);
+    } catch {
+      setAddError("Não foi possível adicionar este álbum. Tente novamente.");
     } finally {
       setIsAdding(false);
     }

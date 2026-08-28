@@ -36,6 +36,10 @@ export function validateStatements(statements: NarrativeStatement[], sourceTexts
   const failures: string[] = [];
 
   for (const [index, statement] of statements.entries()) {
+    if (!statement || typeof statement.text !== "string") {
+      failures.push(`statement ${index}: missing or malformed statement`);
+      continue;
+    }
     if (statement.kind === "fact" && statement.sourceIds.length === 0) {
       failures.push(`statement ${index}: missing source citation for a fact statement`);
     }

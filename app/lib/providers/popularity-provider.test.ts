@@ -15,7 +15,7 @@ describe("PopularityProvider", () => {
 
     const tags = await provider.fetchTags({ artistName: "Janet Jackson", albumTitle: "Control" });
 
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("ws.audioscrobbler.com/2.0"));
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("ws.audioscrobbler.com/2.0"), expect.anything());
     expect(tags).toEqual(["funk", "pop"]);
   });
 

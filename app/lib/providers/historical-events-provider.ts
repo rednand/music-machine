@@ -18,6 +18,7 @@ const WINDOW_DAYS = 90;
 const MIN_SITELINKS = 10;
 const MIN_DATE_PRECISION = 10;
 const MAX_EVENTS = 10;
+const REQUEST_TIMEOUT_MS = 15000;
 
 const NOISE_PATTERNS = [
   /^\d{4}$/,
@@ -71,7 +72,8 @@ export class HistoricalEventsProvider implements HistoricalEventsProviderAdapter
 
     try {
       const response = await this.fetchImpl(url, {
-        headers: { accept: "application/sparql-results+json", "user-agent": this.config.userAgent }
+        headers: { accept: "application/sparql-results+json", "user-agent": this.config.userAgent },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
       if (!response.ok) {
         return [];

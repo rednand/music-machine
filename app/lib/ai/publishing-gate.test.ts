@@ -57,4 +57,14 @@ describe("validateStatements", () => {
     expect(result.valid).toBe(false);
     expect(result.failures).toEqual(expect.arrayContaining([expect.stringContaining("refused")]));
   });
+
+  it("fails instead of crashing when a statement in the array is missing or malformed", () => {
+    const result = validateStatements(
+      [undefined, { text: "O álbum é visto como um marco.", kind: "interpretation", sourceIds: [] }] as never,
+      sourceTexts
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.failures).toEqual(expect.arrayContaining([expect.stringContaining("malformed")]));
+  });
 });

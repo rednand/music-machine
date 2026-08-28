@@ -28,6 +28,8 @@ interface ReleaseResponse {
   tracklist?: ReleaseTrack[];
 }
 
+const REQUEST_TIMEOUT_MS = 15000;
+
 function parseDurationToSeconds(duration?: string): number | undefined {
   if (!duration) {
     return undefined;
@@ -59,7 +61,10 @@ export class DiscographyProvider implements CreditsProviderAdapter {
     });
     const searchUrl = `https://api.discogs.com/database/search?${searchParams.toString()}`;
 
-    const searchResponse = await this.fetchImpl(searchUrl, { headers: this.headers() });
+    const searchResponse = await this.fetchImpl(searchUrl, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
     const searchData = (await searchResponse.json()) as SearchResponse;
     const first = searchData.results[0];
     if (!first) {
@@ -67,7 +72,10 @@ export class DiscographyProvider implements CreditsProviderAdapter {
     }
 
     const releaseUrl = `https://api.discogs.com/releases/${first.id}`;
-    const releaseResponse = await this.fetchImpl(releaseUrl, { headers: this.headers() });
+    const releaseResponse = await this.fetchImpl(releaseUrl, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
     const releaseData = (await releaseResponse.json()) as ReleaseResponse;
     return { releaseUrl, releaseData };
   }

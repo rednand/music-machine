@@ -34,7 +34,8 @@ describe("getAlbumTechnicalSheet", () => {
         sameEraAlbums: [],
         performance: null,
         recommendations: [],
-        listPlacements: []
+        listPlacements: [],
+        era: { year: "1986", historicalEvents: [], news: [] }
       }
     });
 
@@ -72,7 +73,8 @@ describe("getAlbumNarrative", () => {
         summary: [],
         curiosities: [],
         influence: [{ id: "i1", artistName: "Missy Elliott", albumId: "album-2", explanation: "x" }],
-        failedFacets: []
+        failedFacets: [],
+        pendingFacets: []
       }
     });
 

@@ -13,6 +13,7 @@ import { SectionCard } from "@/components/SectionCard";
 import { PerformancePanel } from "@/components/PerformancePanel";
 import { RecommendationsList } from "@/components/RecommendationsList";
 import { OtherAlbumsByArtist } from "@/components/OtherAlbumsByArtist";
+import { EraSection } from "@/components/EraSection";
 import { NarrativeSections } from "@/components/NarrativeSections";
 import { AlbumAmbientTint } from "@/components/AlbumAmbientTint";
 
@@ -61,7 +62,13 @@ export default async function AlbumPage({
       )}
 
       <div className="mt-10">
-        <AlbumTabs />
+        <AlbumTabs
+          albumId={albumId}
+          initial={narrative}
+          hasSameEraAlbums={body.sameEraAlbums.length > 0}
+          hasOtherAlbumsByArtist={body.otherAlbumsByArtist.length > 0}
+          hasEra={body.era.historicalEvents.length > 0 || body.era.news.length > 0}
+        />
       </div>
 
       {body.header.hook && (
@@ -94,6 +101,14 @@ export default async function AlbumPage({
             <PerformancePanel records={body.performance} />
           </SectionCard>
         </NarrativeSections>
+
+        <EraSection
+          era={body.era}
+          artistName={body.header.artist}
+          albumTitle={body.header.title}
+          releaseDate={body.header.releaseDate}
+          coverArtUrl={body.header.coverArtUrl}
+        />
 
         <SectionCard id="linha-do-tempo" title={`Linha do tempo de ${body.header.artist}`}>
           <OtherAlbumsByArtist albums={body.otherAlbumsByArtist} />

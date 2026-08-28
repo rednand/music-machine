@@ -13,6 +13,7 @@ import { createInfluenceRepository } from "../lib/db/influence";
 import { createNarrativeArticleRepository } from "../lib/db/narrative-article";
 import { createRecommendationRepository } from "../lib/db/recommendation";
 import { createDiscographyCacheRepository } from "../lib/db/discography-cache";
+import { createEraNewsCacheRepository } from "../lib/db/era-news-cache";
 import { createListPlacementRepository } from "../lib/db/list-placement";
 import { toSupabaseLike } from "../lib/db/supabase-like";
 import { GroqClient } from "../lib/ai/client";
@@ -24,6 +25,7 @@ import { DiscographyProvider } from "../lib/providers/discography-provider";
 import { PopularityProvider } from "../lib/providers/popularity-provider";
 import { EncyclopediaProvider } from "../lib/providers/encyclopedia-provider";
 import { HistoricalEventsProvider } from "../lib/providers/historical-events-provider";
+import { CultureNewsProvider } from "../lib/providers/culture-news-provider";
 import { MusicBrainzProvider } from "../lib/providers/musicbrainz-provider";
 import {
   assembleTechnicalSheet,
@@ -41,7 +43,8 @@ import {
   persistPerformanceRecordsForProduction,
   persistCuriositiesForProduction,
   persistInfluenceForProduction,
-  findRecommendationCandidatesForProduction
+  findRecommendationCandidatesForProduction,
+  fetchCultureNewsForProduction
 } from "../lib/ingestion/album-context-production";
 import Groq from "groq-sdk";
 
@@ -67,6 +70,7 @@ const TRACED_DEP_KEYS: (keyof AlbumContextDeps)[] = [
   "persistInfluence",
   "findSameEraAlbums",
   "findHistoricalEvents",
+  "fetchCultureNews",
   "findArtistDiscography",
   "ingestAlbum",
   "findRecommendationCandidates",
@@ -89,6 +93,7 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
   const narrativeArticles = createNarrativeArticleRepository(admin);
   const recommendationRepo = createRecommendationRepository(admin);
   const discographyCacheRepo = createDiscographyCacheRepository(admin);
+  const eraNewsCacheRepo = createEraNewsCacheRepository(admin);
   const listPlacementRepo = createListPlacementRepository(supabase);
   const sourceResolutionCache = new Map<string, Promise<string>>();
 
@@ -128,6 +133,7 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
   const historicalEvents = new HistoricalEventsProvider({
     userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
+  const cultureNews = new CultureNewsProvider({ apiKey: process.env.CULTURE_NEWS_PROVIDER_API_KEY ?? "" });
   const musicbrainz = new MusicBrainzProvider({
     userAgent: process.env.ENCYCLOPEDIA_PROVIDER_USER_AGENT ?? "music-time-machine/0.1.0"
   });
@@ -154,6 +160,12 @@ async function buildAlbumContextDeps(): Promise<AlbumContextDeps> {
     findArtistDiscography: (artist) =>
       findArtistDiscographyForProduction(artist, catalog, adminAlbumRepo, discographyCacheRepo),
     findHistoricalEvents: (releaseDate) => historicalEvents.fetchEvents(releaseDate),
+    fetchCultureNews: (query, year, albumId) =>
+      fetchCultureNewsForProduction(query, year, albumId, String(new Date().getFullYear()), {
+        cache: eraNewsCacheRepo,
+        provider: cultureNews,
+        gptClient
+      }),
     ingestAlbum: (query) => ingestAlbum(query, { catalog, discography, popularity, encyclopedia, musicbrainz }),
     fetchTracks: (externalId) => catalog.fetchTracks(externalId),
     gptClient,

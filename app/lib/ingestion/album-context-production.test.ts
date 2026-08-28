@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchCultureNewsForProduction,
   findArtistDiscographyForProduction,
   findSameEraAlbumsForProduction,
   persistCuriositiesForProduction,
@@ -265,5 +266,152 @@ describe("persistInfluenceForProduction", () => {
     expect(created.source_id).toBe("existing-source-1");
     expect(created.from_album_id).toBe("album-1");
     expect(tables["sources"] ?? []).toHaveLength(0);
+  });
+});
+
+describe("fetchCultureNewsForProduction", () => {
+  function fakeCache(cached: unknown = null) {
+    return { findByAlbumId: vi.fn().mockResolvedValue(cached), save: vi.fn() };
+  }
+
+  it("returns the cached news without calling the Guardian API or the AI client at all", async () => {
+    const cached = [{ title: "Janet Jackson anuncia turnê de relançamento", date: "2024-03-15", url: "https://example.com/a" }];
+    const cache = fakeCache(cached);
+    const provider = { fetchNewsForYear: vi.fn() };
+    const gptClient = { complete: vi.fn() };
+
+    const result = await fetchCultureNewsForProduction("Janet Jackson", "1986", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(result).toEqual(cached);
+    expect(provider.fetchNewsForYear).not.toHaveBeenCalled();
+    expect(gptClient.complete).not.toHaveBeenCalled();
+  });
+
+  it("fetches, translates, and caches fresh news when the album's year is not the current year", async () => {
+    const cache = fakeCache();
+    const provider = {
+      fetchNewsForYear: vi.fn().mockResolvedValue([
+        {
+          text: "Janet Jackson announces reissue tour",
+          date: "2024-03-15",
+          source: { providerName: "culture_news", url: "https://example.com/a", retrievedAt: "now" }
+        }
+      ])
+    };
+    const gptClient = {
+      complete: vi.fn().mockResolvedValue(JSON.stringify({ translations: ["Janet Jackson anuncia turnê de relançamento"] }))
+    };
+
+    const result = await fetchCultureNewsForProduction("Janet Jackson", "2024", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(result).toEqual([
+      { title: "Janet Jackson anuncia turnê de relançamento", date: "2024-03-15", url: "https://example.com/a" }
+    ]);
+    expect(cache.save).toHaveBeenCalledWith("album-1", result);
+  });
+
+  it("does not cache the result when the album's year is the current year, since new news can still arrive", async () => {
+    const cache = fakeCache();
+    const provider = {
+      fetchNewsForYear: vi.fn().mockResolvedValue([
+        {
+          text: "Some artist just dropped a new single",
+          date: "2026-08-01",
+          source: { providerName: "culture_news", url: "https://example.com/b", retrievedAt: "now" }
+        }
+      ])
+    };
+    const gptClient = { complete: vi.fn().mockResolvedValue(JSON.stringify({ translations: ["Algum artista lançou um single novo"] })) };
+
+    await fetchCultureNewsForProduction("Some Artist", "2026", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(cache.save).not.toHaveBeenCalled();
+  });
+
+  it("sorts news from the oldest date to the most recent, regardless of the order the provider returned them in", async () => {
+    const cache = fakeCache();
+    const provider = {
+      fetchNewsForYear: vi.fn().mockResolvedValue([
+        {
+          text: "Older headline",
+          date: "2024-01-10",
+          source: { providerName: "culture_news", url: "https://example.com/older", retrievedAt: "now" }
+        },
+        {
+          text: "Newest headline",
+          date: "2024-06-20",
+          source: { providerName: "culture_news", url: "https://example.com/newest", retrievedAt: "now" }
+        },
+        {
+          text: "Middle headline",
+          date: "2024-03-15",
+          source: { providerName: "culture_news", url: "https://example.com/middle", retrievedAt: "now" }
+        }
+      ])
+    };
+    const gptClient = {
+      complete: vi
+        .fn()
+        .mockResolvedValue(JSON.stringify({ translations: ["Manchete antiga", "Manchete mais recente", "Manchete do meio"] }))
+    };
+
+    const result = await fetchCultureNewsForProduction("Janet Jackson", "2024", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(result.map((item) => item.date)).toEqual(["2024-01-10", "2024-03-15", "2024-06-20"]);
+  });
+
+  it("keeps the original headline when translation fails, instead of losing the news item", async () => {
+    const cache = fakeCache();
+    const provider = {
+      fetchNewsForYear: vi.fn().mockResolvedValue([
+        {
+          text: "Janet Jackson announces reissue tour",
+          date: "2024-03-15",
+          source: { providerName: "culture_news", url: "https://example.com/a", retrievedAt: "now" }
+        }
+      ])
+    };
+    const gptClient = { complete: vi.fn().mockRejectedValue(new Error("Groq returned an empty completion")) };
+
+    const result = await fetchCultureNewsForProduction("Janet Jackson", "2024", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(result).toEqual([
+      { title: "Janet Jackson announces reissue tour", date: "2024-03-15", url: "https://example.com/a" }
+    ]);
+  });
+
+  it("returns an empty array without translating anything when there is no coverage for that year", async () => {
+    const cache = fakeCache();
+    const provider = { fetchNewsForYear: vi.fn().mockResolvedValue([]) };
+    const gptClient = { complete: vi.fn() };
+
+    const result = await fetchCultureNewsForProduction("Obscure Artist", "1979", "album-1", "2026", {
+      cache: cache as never,
+      provider,
+      gptClient
+    });
+
+    expect(result).toEqual([]);
+    expect(gptClient.complete).not.toHaveBeenCalled();
   });
 });

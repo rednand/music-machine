@@ -166,6 +166,10 @@ export async function synthesizeNarrative(
         ]);
         const launch = extractJsonObject<RawStatementResponse>(launchRaw).statements[0];
         const today = extractJsonObject<RawStatementResponse>(todayRaw).statements[0];
+        if (!launch || !today) {
+          facets[facet] = { statements: [], generationFailed: true };
+          continue;
+        }
         facets[facet] = { statements: [launch, today] };
         continue;
       }

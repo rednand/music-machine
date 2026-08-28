@@ -15,6 +15,10 @@ vi.mock("../lib/supabase/admin.js", () => ({
   createSupabaseAdminClient: vi.fn().mockReturnValue({})
 }));
 
+vi.mock("../lib/auth", () => ({
+  getCurrentIsAdmin: vi.fn().mockResolvedValue(false)
+}));
+
 beforeEach(() => {
   vi.spyOn(MusicBrainzProvider.prototype, "fetchOriginalReleaseDate").mockResolvedValue(null);
   vi.spyOn(CatalogProvider.prototype, "searchByText").mockResolvedValue([]);

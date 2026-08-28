@@ -11,6 +11,8 @@ interface AlbumInfoResponse {
   error?: number;
 }
 
+const REQUEST_TIMEOUT_MS = 15000;
+
 export class PopularityProvider implements PopularityProviderAdapter {
   readonly providerName = "popularity";
 
@@ -30,7 +32,7 @@ export class PopularityProvider implements PopularityProviderAdapter {
     const url = `https://ws.audioscrobbler.com/2.0/?${params.toString()}`;
 
     try {
-      const response = await this.fetchImpl(url);
+      const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!response.ok) {
         return [];
       }

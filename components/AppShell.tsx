@@ -80,11 +80,7 @@ export function AppShell({ children, isAdmin = false }: { children: React.ReactN
 
       <main className="relative z-10 pb-16 md:pb-0 md:pl-[clamp(104px,9vw,140px)]">
         {children}
-        {isAdmin && (
-          <div className="mx-auto max-w-[980px] px-6 pb-10 md:pr-[clamp(24px,4vw,72px)]">
-            <AdminDebugPanel />
-          </div>
-        )}
+        {isAdmin && <AdminDebugPanel />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#171420]/[0.08] bg-white/70 p-2 backdrop-blur-xl md:hidden">

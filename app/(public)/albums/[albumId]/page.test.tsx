@@ -30,6 +30,11 @@ const readyTechnicalBody = {
   sameEraAlbums: [],
   performance: null,
   listPlacements: [],
+  era: {
+    year: "1986",
+    historicalEvents: [{ title: "Acidente do vaivém Challenger", date: "1986-01-28" }],
+    news: [{ title: "Janet Jackson announces reissue tour", date: "2024-03-15", url: "https://example.com/news" }]
+  },
   recommendations: [
     {
       id: "r1",
@@ -51,7 +56,8 @@ const readyNarrativeBody = {
   summary: [],
   curiosities: [{ id: "c1", album_id: "album-1", summary: "Curiosidade de bastidor.", status: "unconfirmed" as const, source_id: "s1" }],
   influence: [{ id: "i1", artistName: "Missy Elliott", albumId: "album-2", explanation: "Definiu o new jack swing." }],
-  failedFacets: []
+  failedFacets: [],
+  pendingFacets: []
 };
 
 describe("AlbumPage", () => {
@@ -91,6 +97,12 @@ describe("AlbumPage", () => {
     const albumSectionHeading = screen.getByRole("heading", { name: "O álbum" });
     expect(hookText.compareDocumentPosition(albumSectionHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/o desastre do challenger/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Era 1986" })).toBeInTheDocument();
+    expect(screen.getByText("Acidente do vaivém Challenger")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /janet jackson announces reissue tour/i })).toHaveAttribute(
+      "href",
+      "https://example.com/news"
+    );
     expect(screen.getByText(/dados de desempenho não disponíveis/i)).toBeInTheDocument();
     expect(screen.getByText("Curiosidade de bastidor.")).toBeInTheDocument();
     expect(screen.getByText("Missy Elliott")).toBeInTheDocument();
@@ -98,6 +110,16 @@ describe("AlbumPage", () => {
     expect(screen.getByText("True Blue")).toBeInTheDocument();
     expect(screen.getByText("Madonna")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /rhythm nation 1814/i })).toHaveAttribute("href", "/albums/album-2");
+
+    const eraHeading = screen.getByRole("heading", { name: "Era 1986" });
+    const curiosidadeText = screen.getByText("Curiosidade de bastidor.");
+    const linhaDoTempoHeading = screen.getByRole("heading", { name: "Linha do tempo de Janet Jackson" });
+    expect(curiosidadeText.compareDocumentPosition(eraHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(eraHeading.compareDocumentPosition(linhaDoTempoHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const challengerEvent = screen.getByText("Acidente do vaivém Challenger");
+    const albumMarker = screen.getByText("4 DE FEVEREIRO DE 1986");
+    expect(challengerEvent.compareDocumentPosition(albumMarker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows the Listas section with each list name and position when the album is on at least one list", async () => {

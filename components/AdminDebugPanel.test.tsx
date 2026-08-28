@@ -76,6 +76,50 @@ describe("AdminDebugPanel", () => {
     expect(screen.getByText("Failed to create source: 23502")).toBeInTheDocument();
   });
 
+  it("keeps the most recent call at the top of the list", () => {
+    render(<AdminDebugPanel />);
+    const source = FakeEventSource.instances[0];
+
+    act(() => {
+      source.emit({ id: "1", label: "findAlbum", status: "ok", durationMs: 12 });
+    });
+    act(() => {
+      source.emit({ id: "2", label: "findArtistById", status: "pending" });
+    });
+
+    const labels = screen.getAllByText(/^(findAlbum|findArtistById)$/).map((node) => node.textContent);
+    expect(labels).toEqual(["findArtistById", "findAlbum"]);
+  });
+
+  it("clears previous calls when a new button is clicked", () => {
+    render(
+      <div>
+        <button type="button">Outro botão</button>
+        <AdminDebugPanel />
+      </div>
+    );
+    const source = FakeEventSource.instances[0];
+
+    act(() => {
+      source.emit({ id: "1", label: "findAlbum", status: "ok", durationMs: 12 });
+    });
+    expect(screen.getByText("findAlbum")).toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole("button", { name: "Outro botão" }).click();
+    });
+
+    expect(screen.queryByText("findAlbum")).not.toBeInTheDocument();
+    expect(screen.queryByText(/DEBUG/)).not.toBeInTheDocument();
+
+    act(() => {
+      source.emit({ id: "2", label: "findArtistById", status: "ok", durationMs: 8 });
+    });
+
+    expect(screen.getByText("findArtistById")).toBeInTheDocument();
+    expect(screen.queryByText("findAlbum")).not.toBeInTheDocument();
+  });
+
   it("closes the event source on unmount", () => {
     const { unmount } = render(<AdminDebugPanel />);
     const source = FakeEventSource.instances[0];

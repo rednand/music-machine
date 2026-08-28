@@ -35,8 +35,12 @@ describe("CatalogProvider", () => {
 
     const results = await provider.searchAlbum({ artistName: "Korn", albumTitle: "Follow The Leader" });
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.stringContaining("api.deezer.com/search/album"));
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://api.deezer.com/album/14344576");
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("api.deezer.com/search/album"),
+      expect.anything()
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://api.deezer.com/album/14344576", expect.anything());
     expect(results).toEqual([
       expect.objectContaining({
         title: "Follow The Leader",
@@ -91,7 +95,11 @@ describe("CatalogProvider", () => {
 
     const results = await provider.searchByText("Janet Jackson Rhythm Nation");
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.stringContaining("q=Janet%20Jackson%20Rhythm%20Nation"));
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("q=Janet%20Jackson%20Rhythm%20Nation"),
+      expect.anything()
+    );
     expect(results).toEqual([
       expect.objectContaining({ title: "Rhythm Nation 1814", externalId: "987", artistName: "Janet Jackson" })
     ]);
@@ -139,6 +147,28 @@ describe("CatalogProvider", () => {
     expect(results).toEqual([expect.objectContaining({ title: "Pornography", externalId: "1" })]);
   });
 
+  it("strips commas from the query before hitting Deezer, since Deezer returns zero results for some comma-containing queries", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [{ id: 1, title: "Here My Dear", artist: { id: 1, name: "Marvin Gaye" } }]
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ release_date: "1978-12-15", nb_tracks: 12 }));
+
+    const provider = new CatalogProvider(fetchImpl as unknown as typeof fetch);
+
+    const results = await provider.searchByText("Marvin Gaye Here, My Dear");
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("q=Marvin%20Gaye%20Here%20My%20Dear"),
+      expect.anything()
+    );
+    expect(results).toEqual([expect.objectContaining({ title: "Here My Dear", externalId: "1" })]);
+  });
+
   it("returns an empty array when a free-text search matches nothing", async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ data: [] }));
 
@@ -171,7 +201,10 @@ describe("CatalogProvider", () => {
 
     const results = await provider.fetchTracks("14344576");
 
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/album/14344576/tracks"));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("api.deezer.com/album/14344576/tracks"),
+      expect.anything()
+    );
     expect(results).toEqual([
       expect.objectContaining({ title: "It's On!", position: "1", durationSeconds: 268 }),
       expect.objectContaining({ title: "Freak On a Leash", position: "2", durationSeconds: 255 })
@@ -201,7 +234,7 @@ describe("CatalogProvider", () => {
 
     const artistId = await provider.searchArtist("Korn");
 
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/search/artist"));
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/search/artist"), expect.anything());
     expect(artistId).toBe("1327");
   });
 
@@ -236,7 +269,10 @@ describe("CatalogProvider", () => {
 
     const albums = await provider.fetchArtistAlbums("artist-1");
 
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("api.deezer.com/artist/artist-1/albums"));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("api.deezer.com/artist/artist-1/albums"),
+      expect.anything()
+    );
     expect(albums).toEqual([
       expect.objectContaining({ title: "Like a Virgin", externalId: "1", releaseDate: "1984-11-12" }),
       expect.objectContaining({ title: "True Blue", externalId: "3", releaseDate: "1986-06-30" })

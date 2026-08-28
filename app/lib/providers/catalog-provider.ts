@@ -61,6 +61,7 @@ interface DeezerTracksResponse {
 }
 
 const REISSUE_KEYWORDS = "deluxe|remaster(?:ed)?|edition|anniversary|expanded|bonus|special|reissue|version";
+const REQUEST_TIMEOUT_MS = 15000;
 
 function stripReissueSuffix(title: string): string {
   return title
@@ -106,9 +107,10 @@ export class CatalogProvider implements CatalogProviderAdapter {
   }
 
   private async search(rawQuery: string, fallbackArtistName?: string): Promise<RawAlbumData[]> {
-    const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(rawQuery)}`;
+    const query = rawQuery.replace(/,/g, " ").replace(/\s+/g, " ").trim();
+    const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(query)}`;
 
-    const response = await this.fetchImpl(url);
+    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
       return [];
     }
@@ -140,7 +142,9 @@ export class CatalogProvider implements CatalogProviderAdapter {
   }
 
   private async fetchAlbumDetails(albumId: number): Promise<DeezerAlbumDetails | null> {
-    const response = await this.fetchImpl(`https://api.deezer.com/album/${albumId}`);
+    const response = await this.fetchImpl(`https://api.deezer.com/album/${albumId}`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    });
     if (!response.ok) {
       return null;
     }
@@ -150,7 +154,7 @@ export class CatalogProvider implements CatalogProviderAdapter {
   async fetchTracks(albumId: string): Promise<RawTrackData[]> {
     const url = `https://api.deezer.com/album/${albumId}/tracks?limit=100`;
 
-    const response = await this.fetchImpl(url);
+    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
       return [];
     }
@@ -168,7 +172,7 @@ export class CatalogProvider implements CatalogProviderAdapter {
   async searchArtist(artistName: string): Promise<string | null> {
     const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(`"${artistName}"`)}`;
 
-    const response = await this.fetchImpl(url);
+    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
       return null;
     }
@@ -185,7 +189,7 @@ export class CatalogProvider implements CatalogProviderAdapter {
     const retrievedAt = new Date().toISOString();
     const url = `https://api.deezer.com/artist/${artistId}/albums?limit=100`;
 
-    const response = await this.fetchImpl(url);
+    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
       return null;
     }

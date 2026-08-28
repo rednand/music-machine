@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getAlbumNarrative } from "@/app/actions/album-context";
 import type { NarrativeResult } from "@/app/actions/album-context";
 import type { NarrativeFacet } from "@/app/lib/ai/narrative";
 import { NarrativeSection } from "@/components/NarrativeSection";
@@ -11,8 +9,8 @@ import { InfluenceList } from "@/components/InfluenceList";
 import { CuriositiesList } from "@/components/CuriositiesList";
 import { SectionCard } from "@/components/SectionCard";
 import { LoadingIndicator } from "@/components/LoadingIndicator";
+import { useNarrativeResult } from "@/components/useNarrativeResult";
 
-const POLL_INTERVAL_MS = 3007;
 const WORLD_CONTEXT_LABELS = ["Política", "Cultura", "Tecnologia"];
 const GENERATION_ERROR_MESSAGE = "Não foi possível gerar este conteúdo agora.";
 
@@ -45,44 +43,15 @@ export function NarrativeSections({
   year: string;
   children?: React.ReactNode;
 }) {
-  const [result, setResult] = useState<NarrativeResult>(initial);
-
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    async function poll() {
-      try {
-        const next = await getAlbumNarrative(albumId);
-        if (cancelled) {
-          return;
-        }
-        setResult(next);
-        if (next.state === "not_started" || next.state === "in_progress") {
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
-        }
-      } catch {
-        if (!cancelled) {
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
-        }
-      }
-    }
-
-    if (result.state === "not_started" || result.state === "in_progress") {
-      timer = setTimeout(poll, POLL_INTERVAL_MS);
-    }
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [albumId]);
+  const result = useNarrativeResult(albumId, initial);
 
   const isLoading =
     result.state === "not_started" || result.state === "in_progress";
   const isGroupError = result.state === "error" || result.state === "not_found";
   const failedFacets: NarrativeFacet[] =
     result.state === "ready" ? result.body.failedFacets : [];
+  const pendingFacets: NarrativeFacet[] =
+    result.state === "ready" ? result.body.pendingFacets : [];
 
   const artistMoment = result.state === "ready" ? result.body.artistMoment : [];
   const worldContext = result.state === "ready" ? result.body.worldContext : [];
@@ -96,7 +65,7 @@ export function NarrativeSections({
   return (
     <>
       <div id="artista">
-        {isLoading ? (
+        {isLoading || pendingFacets.includes("artist_moment") ? (
           <LoadingSection title="O momento do artista" />
         ) : isGroupError || failedFacets.includes("artist_moment") ? (
           <ErrorSection title="O momento do artista" />
@@ -109,7 +78,7 @@ export function NarrativeSections({
       </div>
 
       <div id="mundo">
-        {isLoading ? (
+        {isLoading || pendingFacets.includes("world_context") ? (
           <LoadingSection title={worldContextTitle} />
         ) : isGroupError || failedFacets.includes("world_context") ? (
           <ErrorSection title={worldContextTitle} />
@@ -125,7 +94,7 @@ export function NarrativeSections({
       {children}
 
       <div id="legado">
-        {isLoading ? (
+        {isLoading || pendingFacets.includes("reception_vs_legacy") ? (
           <LoadingSection title="Recepção então x legado hoje" />
         ) : isGroupError || failedFacets.includes("reception_vs_legacy") ? (
           <ErrorSection title="Recepção então x legado hoje" />

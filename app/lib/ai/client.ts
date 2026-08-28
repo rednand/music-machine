@@ -5,16 +5,21 @@ export interface ChatCompletionClient {
 export interface GroqLikeClient {
   chat: {
     completions: {
-      create(params: {
-        model: string;
-        messages: Array<{ role: "user"; content: string }>;
-        max_completion_tokens?: number;
-        response_format?: { type: "json_object" };
-        reasoning_effort?: "low" | "medium" | "high";
-      }): Promise<{ choices: Array<{ message: { content: string | null } }> }>;
+      create(
+        params: {
+          model: string;
+          messages: Array<{ role: "user"; content: string }>;
+          max_completion_tokens?: number;
+          response_format?: { type: "json_object" };
+          reasoning_effort?: "low" | "medium" | "high";
+        },
+        options?: { timeout?: number }
+      ): Promise<{ choices: Array<{ message: { content: string | null } }> }>;
     };
   };
 }
+
+const REQUEST_TIMEOUT_MS = 20000;
 
 export interface GroqClientConfig {
   models: string[];
@@ -33,13 +38,16 @@ export class GroqClient implements ChatCompletionClient {
   ) {}
 
   private async completeWithModel(model: string, prompt: string): Promise<string> {
-    const response = await this.groq.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      max_completion_tokens: 2048,
-      response_format: { type: "json_object" },
-      ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" as const } : {})
-    });
+    const response = await this.groq.chat.completions.create(
+      {
+        model,
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 2048,
+        response_format: { type: "json_object" },
+        ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" as const } : {})
+      },
+      { timeout: REQUEST_TIMEOUT_MS }
+    );
 
     const content = response.choices[0]?.message.content;
     if (!content) {

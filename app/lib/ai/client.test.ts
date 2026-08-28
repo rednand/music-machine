@@ -22,7 +22,8 @@ describe("GroqClient", () => {
 
     expect(result).toBe("resposta primaria");
     expect(groq.chat.completions.create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "primary-model" })
+      expect.objectContaining({ model: "primary-model" }),
+      expect.objectContaining({ timeout: expect.any(Number) })
     );
   });
 
@@ -87,7 +88,8 @@ describe("GroqClient", () => {
     expect(result).toBe("resposta terceiro modelo");
     expect(groq.chat.completions.create).toHaveBeenCalledTimes(3);
     expect(groq.chat.completions.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ model: "model-3" })
+      expect.objectContaining({ model: "model-3" }),
+      expect.objectContaining({ timeout: expect.any(Number) })
     );
   });
 });

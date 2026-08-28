@@ -92,3 +92,8 @@ export interface HistoricalEventsProviderAdapter {
   readonly providerName: string;
   fetchEvents(releaseDate: string): Promise<RawHistoricalEventData[]>;
 }
+
+export interface CultureNewsProviderAdapter {
+  readonly providerName: string;
+  fetchNewsForYear(query: string, year: string): Promise<RawContextFactData[]>;
+}

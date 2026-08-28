@@ -53,6 +53,7 @@ function buildDeps(overrides: Partial<Record<string, unknown>> = {}) {
     persistInfluence: vi.fn().mockResolvedValue([]),
     findSameEraAlbums: vi.fn().mockResolvedValue([{ title: "True Blue", artistName: "Madonna" }]),
     findHistoricalEvents: vi.fn().mockResolvedValue([]),
+    fetchCultureNews: vi.fn().mockResolvedValue([]),
     findArtistDiscography: vi.fn().mockResolvedValue([]),
     ingestAlbum: vi.fn().mockResolvedValue({
       contextFacts: [{ text: "Control is Janet Jackson's third studio album.", source: { providerName: "encyclopedia", url: "x", retrievedAt: "now" } }],
@@ -419,6 +420,77 @@ describe("assembleTechnicalSheet", () => {
     }
   });
 
+  describe("era section", () => {
+    it("fetches historical events across the album's release year, dedupes and sorts them oldest-first into the era section", async () => {
+      const deps = buildDeps({
+        findHistoricalEvents: vi.fn().mockImplementation((date: string) =>
+          Promise.resolve(
+            date === "1986-03-01"
+              ? [{ title: "Acidente do vaivém Challenger", date: "1986-01-28" }]
+              : [
+                  { title: "Acidente do vaivém Challenger", date: "1986-01-28" },
+                  { title: "Chernobyl disaster", date: "1986-04-26" }
+                ]
+          )
+        )
+      });
+
+      const result = await assembleTechnicalSheet("album-1", deps as never);
+
+      expect(deps.findHistoricalEvents).toHaveBeenCalledWith("1986-03-01");
+      expect(deps.findHistoricalEvents).toHaveBeenCalledWith("1986-09-01");
+      if (result.state === "ready") {
+        expect(result.body.era.year).toBe("1986");
+        expect(result.body.era.historicalEvents).toEqual([
+          { title: "Acidente do vaivém Challenger", date: "1986-01-28" },
+          { title: "Chernobyl disaster", date: "1986-04-26" }
+        ]);
+      }
+    });
+
+    it("keeps events that spilled into the neighboring year from the ±90-day search window, since each one already shows its own accurate date", async () => {
+      const deps = buildDeps({
+        findHistoricalEvents: vi.fn().mockImplementation((date: string) =>
+          Promise.resolve(
+            date === "1986-03-01"
+              ? [
+                  { title: "Assassinato de Andrei Karlov", date: "1985-12-19" },
+                  { title: "Acidente do vaivém Challenger", date: "1986-01-28" }
+                ]
+              : [{ title: "Chernobyl disaster", date: "1986-04-26" }]
+          )
+        )
+      });
+
+      const result = await assembleTechnicalSheet("album-1", deps as never);
+
+      if (result.state === "ready") {
+        expect(result.body.era.historicalEvents).toEqual([
+          { title: "Assassinato de Andrei Karlov", date: "1985-12-19" },
+          { title: "Acidente do vaivém Challenger", date: "1986-01-28" },
+          { title: "Chernobyl disaster", date: "1986-04-26" }
+        ]);
+      }
+    });
+
+    it("fetches culture news for the album's artist and includes it in the era section", async () => {
+      const deps = buildDeps({
+        fetchCultureNews: vi.fn().mockResolvedValue([
+          { title: "Janet Jackson announces reissue tour", date: "2024-03-15", url: "https://example.com/news" }
+        ])
+      });
+
+      const result = await assembleTechnicalSheet("album-1", deps as never);
+
+      expect(deps.fetchCultureNews).toHaveBeenCalledWith("Janet Jackson", "1986", "album-1");
+      if (result.state === "ready") {
+        expect(result.body.era.news).toEqual([
+          { title: "Janet Jackson announces reissue tour", date: "2024-03-15", url: "https://example.com/news" }
+        ]);
+      }
+    });
+  });
+
   describe("narrative generation triggering", () => {
     it("does not schedule narrative generation when every facet is already resolved", async () => {
       const deps = buildDeps();
@@ -468,14 +540,28 @@ describe("assembleNarrative", () => {
     expect(await assembleNarrative("missing", deps as never)).toEqual({ state: "not_found" });
   });
 
-  it("returns in_progress when any facet is still generating", async () => {
+  it("returns in_progress only when every facet is still pending, with nothing resolved yet to show", async () => {
+    const deps = buildDeps();
+    deps.narrativeArticles.findByAlbumAndFacet = vi.fn().mockResolvedValue({ id: "a1", status: "pending" });
+
+    expect(await assembleNarrative("album-1", deps as never)).toEqual({ state: "in_progress" });
+  });
+
+  it("returns ready with the resolved facets already populated, listing the still-pending one in pendingFacets, instead of hiding everything behind a single stuck facet", async () => {
     const deps = buildDeps();
     deps.narrativeArticles.findByAlbumAndFacet = vi
       .fn()
       .mockResolvedValueOnce({ id: "a1", status: "pending" })
       .mockResolvedValue(publishedArticle("world_context"));
 
-    expect(await assembleNarrative("album-1", deps as never)).toEqual({ state: "in_progress" });
+    const result = await assembleNarrative("album-1", deps as never);
+
+    expect(result.state).toBe("ready");
+    if (result.state === "ready") {
+      expect(result.body.pendingFacets).toEqual(["artist_moment"]);
+      expect(result.body.artistMoment).toEqual([]);
+      expect(result.body.worldContext).toEqual([expect.objectContaining({ text: "x" })]);
+    }
   });
 
   it("returns not_started when generation has never been triggered", async () => {
@@ -614,6 +700,53 @@ describe("narrative generation (scheduled background work)", () => {
     expect(markFailedValidation).toHaveBeenCalledTimes(4);
   });
 
+  it("does not re-create or re-fail a facet that this same run already published moments earlier, when a later facet's publish call crashes", async () => {
+    const rows = new Map<string, { id: string; status: string }>();
+    const createPending = vi.fn().mockImplementation((_albumId: string, facet: string) => {
+      const row = { id: `new-${facet}`, status: "pending" };
+      rows.set(facet, row);
+      return Promise.resolve(row);
+    });
+    const publish = vi.fn().mockImplementation((id: string) => {
+      if (id === "new-reception_vs_legacy") {
+        throw new Error("db write failed");
+      }
+      for (const row of rows.values()) {
+        if (row.id === id) {
+          row.status = "published";
+        }
+      }
+      return Promise.resolve({ id, status: "published" });
+    });
+    const markFailedValidation = vi.fn();
+    const findByAlbumAndFacet = vi.fn().mockImplementation((_albumId: string, facet: string) => Promise.resolve(rows.get(facet) ?? null));
+
+    const deps = buildDeps({
+      narrativeArticles: {
+        findByAlbumAndFacet,
+        findStatementsByArticleId: vi.fn().mockResolvedValue([{ text: "x", kind: "fact", sourceIds: ["source-1"] }]),
+        createPending,
+        publish,
+        markFailedValidation
+      }
+    });
+    deps.gptClient.complete = vi.fn().mockImplementation((prompt: string) => Promise.resolve(genericFacetResponse(prompt)));
+
+    await assembleTechnicalSheet("album-1", deps as never);
+    await runScheduledWork(deps);
+
+    expect(rows.get("artist_moment")?.status).toBe("published");
+    expect(rows.get("world_context")?.status).toBe("published");
+    expect(rows.get("musical_scene")?.status).toBe("published");
+    expect(createPending.mock.calls.filter((call) => call[1] === "artist_moment")).toHaveLength(1);
+    expect(createPending.mock.calls.filter((call) => call[1] === "world_context")).toHaveLength(1);
+    expect(createPending.mock.calls.filter((call) => call[1] === "musical_scene")).toHaveLength(1);
+    expect(markFailedValidation).not.toHaveBeenCalledWith("new-artist_moment");
+    expect(markFailedValidation).not.toHaveBeenCalledWith("new-world_context");
+    expect(markFailedValidation).not.toHaveBeenCalledWith("new-musical_scene");
+    expect(markFailedValidation).toHaveBeenCalledWith("new-reception_vs_legacy");
+  });
+
   it("marks a failed-to-generate facet as failed_validation instead of crashing or publishing empty content", async () => {
     const markFailedValidation = vi.fn();
     const publish = vi.fn().mockImplementation((id) => Promise.resolve({ id, status: "published" }));
@@ -687,7 +820,7 @@ describe("narrative generation (scheduled background work)", () => {
     await assembleTechnicalSheet("album-1", deps as never);
     await runScheduledWork(deps);
 
-    expect(deps.findHistoricalEvents).not.toHaveBeenCalled();
+    expect(deps.findHistoricalEvents).not.toHaveBeenCalledWith(album.release_date);
   });
 
   it("reuses an already-published facet's stored statements instead of regenerating and republishing it", async () => {

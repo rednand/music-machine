@@ -63,6 +63,8 @@ export function SearchForm({ isAdmin = false }: { isAdmin?: boolean }) {
     setIsSearching(true);
     try {
       setResults(await searchCatalog(query));
+    } catch {
+      setError("Não foi possível buscar. Tente novamente.");
     } finally {
       setIsSearching(false);
     }
@@ -71,16 +73,21 @@ export function SearchForm({ isAdmin = false }: { isAdmin?: boolean }) {
   async function handleCandidateSelect(candidate: CandidateSearchResult) {
     setError(null);
     setResolvingId(candidate.externalId);
-    const outcome = await resolveSearchCandidate(candidate.query, candidate.externalId);
-    setResolvingId(null);
+    try {
+      const outcome = await resolveSearchCandidate(candidate.query, candidate.externalId);
 
-    if (outcome.state === "error") {
-      setError(outcome.message);
-      return;
+      if (outcome.state === "error") {
+        setError(outcome.message);
+        return;
+      }
+
+      setIsNavigating(true);
+      router.push(`/albums/${outcome.albumId}`);
+    } catch {
+      setError("Não foi possível adicionar este álbum. Tente novamente.");
+    } finally {
+      setResolvingId(null);
     }
-
-    setIsNavigating(true);
-    router.push(`/albums/${outcome.albumId}`);
   }
 
   return (

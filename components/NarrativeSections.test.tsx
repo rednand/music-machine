@@ -33,6 +33,7 @@ const readyBody = {
     { id: "i1", artistName: "Missy Elliott", explanation: "Influência." },
   ],
   failedFacets: [],
+  pendingFacets: [],
 };
 
 beforeEach(() => {
@@ -162,6 +163,24 @@ describe("NarrativeSections", () => {
 
     expect(screen.getByText("Momento do artista.")).toBeInTheDocument();
     expect(screen.getByText(/não foi possível gerar/i)).toBeInTheDocument();
+  });
+
+  it("shows a loading placeholder only for the facet still listed in pendingFacets, while already-resolved facets show their content", () => {
+    render(
+      <NarrativeSections
+        albumId="album-1"
+        initial={{
+          state: "ready",
+          body: { ...readyBody, pendingFacets: ["reception_vs_legacy"] },
+        }}
+        year="1986"
+      />,
+    );
+
+    expect(screen.getByText("Momento do artista.")).toBeInTheDocument();
+    expect(screen.getByText("Contexto de mundo.")).toBeInTheDocument();
+    expect(screen.getByText(/buscando conteúdo/i)).toBeInTheDocument();
+    expect(screen.queryByText("No lançamento.")).not.toBeInTheDocument();
   });
 
   it("hides the Influência and Curiosidades titles entirely when there is no data for them", () => {

@@ -25,6 +25,7 @@ interface SearchResponse {
   query: { search: Array<{ title: string }> };
 }
 
+const REQUEST_TIMEOUT_MS = 15000;
 const CHART_TEMPLATE_PATTERN = /\{\{album chart\|([^|}]+)\|(\d+)/gi;
 const CERTIFICATION_TEMPLATE_PATTERN = /\{\{certification table entry\|([^}]*)\}\}/gi;
 
@@ -107,7 +108,10 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`${query.albumTitle} ${query.artistName} album`)}&format=json&srlimit=5`;
 
     try {
-      const response = await this.fetchImpl(searchUrl, { headers: { "User-Agent": this.config.userAgent } });
+      const response = await this.fetchImpl(searchUrl, {
+        headers: { "User-Agent": this.config.userAgent },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
       if (!response.ok) {
         return null;
       }
@@ -134,7 +138,10 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${title}`;
 
     try {
-      const response = await this.fetchImpl(url, { headers: { "User-Agent": this.config.userAgent } });
+      const response = await this.fetchImpl(url, {
+        headers: { "User-Agent": this.config.userAgent },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
       if (!response.ok) {
         return [];
       }
@@ -168,7 +175,10 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
     const url = `https://en.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&rvslots=main&format=json&titles=${title}`;
 
     try {
-      const response = await this.fetchImpl(url, { headers: { "User-Agent": this.config.userAgent } });
+      const response = await this.fetchImpl(url, {
+        headers: { "User-Agent": this.config.userAgent },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
       if (!response.ok) {
         return [];
       }
@@ -194,7 +204,10 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
     const [summary, wikitext] = await Promise.all([
       (async (): Promise<RawContextFactData | null> => {
         try {
-          const response = await this.fetchImpl(summaryUrl, { headers: { "User-Agent": this.config.userAgent } });
+          const response = await this.fetchImpl(summaryUrl, {
+            headers: { "User-Agent": this.config.userAgent },
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+          });
           if (!response.ok) {
             return null;
           }
@@ -216,7 +229,10 @@ export class EncyclopediaProvider implements EncyclopediaProviderAdapter {
       })(),
       (async (): Promise<string> => {
         try {
-          const response = await this.fetchImpl(revisionsUrl, { headers: { "User-Agent": this.config.userAgent } });
+          const response = await this.fetchImpl(revisionsUrl, {
+            headers: { "User-Agent": this.config.userAgent },
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+          });
           if (!response.ok) {
             return "";
           }

@@ -54,6 +54,7 @@ export interface AlbumContextDeps {
   persistInfluence(albumId: string, items: GeneratedFactItem[], sourceRefs: SourceExcerptRef[]): Promise<InfluenceRow[]>;
   findSameEraAlbums(album: AlbumRow): Promise<SameEraAlbumRef[]>;
   findHistoricalEvents(releaseDate: string): Promise<HistoricalEventRef[]>;
+  fetchCultureNews(query: string, year: string, albumId: string): Promise<EraNewsItem[]>;
   findArtistDiscography(artist: ArtistRow): Promise<DiscographyEntry[]>;
   ingestAlbum(query: { artistName: string; albumTitle: string }): Promise<IngestedAlbum>;
   gptClient: ChatCompletionClient;
@@ -128,6 +129,18 @@ export interface ListPlacementEntry {
   position: number;
 }
 
+export interface EraNewsItem {
+  title: string;
+  date: string;
+  url: string;
+}
+
+export interface EraSection {
+  year: string;
+  historicalEvents: HistoricalEventRef[];
+  news: EraNewsItem[];
+}
+
 export interface TechnicalSheetBody {
   header: AlbumContextHeader;
   tracks: TrackRow[];
@@ -137,6 +150,7 @@ export interface TechnicalSheetBody {
   performance: PerformanceRecordRow[] | null;
   recommendations: RecommendationEntry[];
   listPlacements: ListPlacementEntry[];
+  era: EraSection;
 }
 
 export type TechnicalSheetResult =
@@ -155,6 +169,7 @@ export interface NarrativeBody {
   curiosities: CuriosityRow[];
   influence: InfluenceEntry[];
   failedFacets: NarrativeFacet[];
+  pendingFacets: NarrativeFacet[];
 }
 
 export type NarrativeResult =
@@ -244,17 +259,17 @@ async function publishFacet(
   return facetResult.statements;
 }
 
-async function markFacetFailedIfUnresolved(
-  facet: NarrativeFacet,
-  existing: { id: string; status: string } | null,
-  albumId: string,
-  deps: AlbumContextDeps
-): Promise<void> {
-  if (isResolved(existing)) {
-    return;
-  }
+function isTerminal(article: { status: string } | null): article is { status: string } {
+  return article !== null && (article.status === "published" || article.status === "failed_validation");
+}
+
+async function markFacetFailedIfUnresolved(facet: NarrativeFacet, albumId: string, deps: AlbumContextDeps): Promise<void> {
   try {
-    const article = existing ?? (await deps.narrativeArticles.createPending(albumId, facet));
+    const current = await deps.narrativeArticles.findByAlbumAndFacet(albumId, facet);
+    if (isTerminal(current)) {
+      return;
+    }
+    const article = current ?? (await deps.narrativeArticles.createPending(albumId, facet));
     await deps.narrativeArticles.markFailedValidation(article.id);
   } catch (error) {
     console.error(`Failed to mark facet ${facet} as failed for album ${albumId}`, error);
@@ -362,8 +377,8 @@ async function generateNarrative(
   } catch (error) {
     console.error(`Failed to generate narrative for album ${album.id}`, error);
     await Promise.all([
-      ...FACETS.map((facet, index) => markFacetFailedIfUnresolved(facet, existingArticles[index], album.id, deps)),
-      markFacetFailedIfUnresolved(SUMMARY_FACET, existingSummaryArticle, album.id, deps)
+      ...FACETS.map((facet) => markFacetFailedIfUnresolved(facet, album.id, deps)),
+      markFacetFailedIfUnresolved(SUMMARY_FACET, album.id, deps)
     ]);
   }
 }
@@ -499,19 +514,38 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
   let sameEraAlbums: SameEraAlbumRef[];
   let discography: DiscographyEntry[];
   let listPlacements: ListPlacementEntry[];
+  let firstHalfEvents: HistoricalEventRef[];
+  let secondHalfEvents: HistoricalEventRef[];
+  let cultureNews: EraNewsItem[];
+
+  const releaseYear = album.release_date.slice(0, 4);
 
   try {
-    [existingTracks, existingCredits, artistAlbums, existingPerformance, recommendationRows, sameEraAlbums, discography, listPlacements] =
-      await Promise.all([
-        deps.findTracks(albumId),
-        deps.findCredits(albumId),
-        deps.findAlbumsByArtistId(album.artist_id),
-        deps.findPerformanceRecords(albumId),
-        resolveRecommendations(album, deps),
-        deps.findSameEraAlbums(album),
-        artist ? deps.findArtistDiscography(artist) : Promise.resolve([]),
-        deps.findListPlacements(artist?.name ?? "", album.title)
-      ]);
+    [
+      existingTracks,
+      existingCredits,
+      artistAlbums,
+      existingPerformance,
+      recommendationRows,
+      sameEraAlbums,
+      discography,
+      listPlacements,
+      firstHalfEvents,
+      secondHalfEvents,
+      cultureNews
+    ] = await Promise.all([
+      deps.findTracks(albumId),
+      deps.findCredits(albumId),
+      deps.findAlbumsByArtistId(album.artist_id),
+      deps.findPerformanceRecords(albumId),
+      resolveRecommendations(album, deps),
+      deps.findSameEraAlbums(album),
+      artist ? deps.findArtistDiscography(artist) : Promise.resolve([]),
+      deps.findListPlacements(artist?.name ?? "", album.title),
+      deps.findHistoricalEvents(`${releaseYear}-03-01`),
+      deps.findHistoricalEvents(`${releaseYear}-09-01`),
+      deps.fetchCultureNews(artist?.name ?? album.title, releaseYear, albumId)
+    ]);
   } catch (error) {
     console.error(`Failed to load existing technical sheet data for album ${albumId}`, error);
     return { state: "error", message: "Não foi possível carregar os dados técnicos deste álbum." };
@@ -578,6 +612,18 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
 
   await triggerNarrativeGenerationIfNeeded(album, artist, sameEraAlbums, ingested, deps);
 
+  const seenEventTitles = new Set<string>();
+  const historicalEvents = [...firstHalfEvents, ...secondHalfEvents]
+    .filter((event) => {
+      const key = event.title.toLowerCase();
+      if (seenEventTitles.has(key)) {
+        return false;
+      }
+      seenEventTitles.add(key);
+      return true;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return {
     state: "ready",
     body: {
@@ -598,7 +644,8 @@ export async function assembleTechnicalSheet(albumId: string, deps: AlbumContext
       sameEraAlbums,
       performance: performance.length > 0 ? performance : null,
       recommendations,
-      listPlacements
+      listPlacements,
+      era: { year: releaseYear, historicalEvents, news: cultureNews }
     }
   };
 }
@@ -615,27 +662,34 @@ export async function assembleNarrative(albumId: string, deps: AlbumContextDeps)
       deps.narrativeArticles.findByAlbumAndFacet(albumId, SUMMARY_FACET)
     ]);
 
-    if (existingArticles.some((article) => article?.status === "pending") || existingSummaryArticle?.status === "pending") {
-      return { state: "in_progress" };
-    }
-
-    if (!existingArticles.every(isResolved) || !isResolved(existingSummaryArticle)) {
+    if ([...existingArticles, existingSummaryArticle].every((article) => article === null)) {
       return { state: "not_started" };
     }
 
+    if (![...existingArticles, existingSummaryArticle].some(isTerminal)) {
+      return { state: "in_progress" };
+    }
+
     const failedFacets: NarrativeFacet[] = [];
+    const pendingFacets: NarrativeFacet[] = [];
     const statementsPerFacet = await Promise.all(
       existingArticles.map((article, index) => {
-        if (article!.status === "failed_validation") {
+        if (!isTerminal(article)) {
+          pendingFacets.push(FACETS[index]);
+          return Promise.resolve<NarrativeStatement[]>([]);
+        }
+        if (article.status === "failed_validation") {
           failedFacets.push(FACETS[index]);
           return Promise.resolve<NarrativeStatement[]>([]);
         }
-        return deps.narrativeArticles.findStatementsByArticleId(article!.id);
+        return deps.narrativeArticles.findStatementsByArticleId(article.id);
       })
     );
 
     let summary: NarrativeStatement[] = [];
-    if (existingSummaryArticle.status === "failed_validation") {
+    if (!isTerminal(existingSummaryArticle)) {
+      pendingFacets.push(SUMMARY_FACET);
+    } else if (existingSummaryArticle.status === "failed_validation") {
       failedFacets.push(SUMMARY_FACET);
     } else {
       summary = await deps.narrativeArticles.findStatementsByArticleId(existingSummaryArticle.id);
@@ -662,7 +716,8 @@ export async function assembleNarrative(albumId: string, deps: AlbumContextDeps)
         summary,
         curiosities,
         influence,
-        failedFacets
+        failedFacets,
+        pendingFacets
       }
     };
   } catch (error) {

@@ -194,6 +194,22 @@ describe("synthesizeNarrative", () => {
     expect(result.facets.reception_vs_legacy.statements[1].text).toBe("Hoje, o álbum é visto como um clássico.");
   });
 
+  it("marks reception_vs_legacy as generationFailed instead of producing a broken statement when the model returns zero statements for just one of the two periods", async () => {
+    const gptClient = {
+      complete: vi.fn().mockImplementation((prompt: string) =>
+        Promise.resolve(
+          prompt.includes("(no lançamento)")
+            ? JSON.stringify({ statements: [] })
+            : JSON.stringify({ statements: [{ text: "Hoje, o álbum é visto como um clássico.", kind: "fact", sourceIds: ["source-1"] }] })
+        )
+      )
+    };
+
+    const result = await synthesizeNarrative(baseInput, gptClient, ["reception_vs_legacy"]);
+
+    expect(result.facets.reception_vs_legacy).toEqual({ statements: [], generationFailed: true });
+  });
+
   it("only generates the requested subset of facets, leaving the rest absent", async () => {
     const gptClient = { complete: vi.fn().mockImplementation((prompt: string) => Promise.resolve(fakeGptResponseWithFacet(prompt))) };
 

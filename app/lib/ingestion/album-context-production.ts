@@ -1,17 +1,26 @@
 import { createAlbumRepository, type AlbumRow, type ArtistRow, type CreditRow, type TrackRow } from "../db/album";
 import { createSourceRepository } from "../db/source";
 import type { DiscographyCacheRepository } from "../db/discography-cache";
+import type { EraNewsCacheRepository } from "../db/era-news-cache";
 import type { CatalogProvider } from "../providers/catalog-provider";
-import type { RawAlbumData, RawCreditData, RawPerformanceRecordData, RawTrackData } from "../providers/provider.interface";
+import type {
+  RawAlbumData,
+  RawContextFactData,
+  RawCreditData,
+  RawPerformanceRecordData,
+  RawTrackData
+} from "../providers/provider.interface";
 import { createPerformanceRecordRepository, type PerformanceRecordRow } from "../db/performance-record";
 import { createCuriosityRepository, type CuriosityRow } from "../db/curiosity";
 import { createInfluenceRepository, type InfluenceRow } from "../db/influence";
 import { type RecommendationCandidateAlbum } from "../db/recommendation";
 import { toSupabaseLike } from "../db/supabase-like";
+import type { ChatCompletionClient } from "../ai/client";
 import type { GeneratedFactItem } from "../ai/curiosity-influence";
+import { translateTitles } from "../ai/translate";
 import { findSameEraAlbums } from "../same-era";
 import { parseTrackNumber } from "./track-number";
-import { normalizeAlbumTitle, type DiscographyEntry, type SourceExcerptRef } from "./album-context";
+import { normalizeAlbumTitle, type DiscographyEntry, type EraNewsItem, type SourceExcerptRef } from "./album-context";
 
 export async function findSameEraAlbumsForProduction(
   album: AlbumRow,
@@ -250,4 +259,41 @@ export async function findRecommendationCandidatesForProduction(
   return allAlbums
     .filter((a) => a.id !== albumId)
     .map((a) => ({ id: a.id, title: a.title, releaseDate: new Date(a.release_date), genre: a.genre }));
+}
+
+export interface CultureNewsProviderLike {
+  fetchNewsForYear(query: string, year: string): Promise<RawContextFactData[]>;
+}
+
+export async function fetchCultureNewsForProduction(
+  query: string,
+  year: string,
+  albumId: string,
+  currentYear: string,
+  deps: {
+    cache: Pick<EraNewsCacheRepository, "findByAlbumId" | "save">;
+    provider: CultureNewsProviderLike;
+    gptClient: ChatCompletionClient;
+  }
+): Promise<EraNewsItem[]> {
+  const cached = await deps.cache.findByAlbumId(albumId);
+  if (cached) {
+    return cached;
+  }
+
+  const rawNews = await deps.provider.fetchNewsForYear(query, year);
+  const translatedTitles = await translateTitles(rawNews.map((item) => item.text), deps.gptClient);
+  const news: EraNewsItem[] = rawNews
+    .map((item, index) => ({
+      title: translatedTitles[index] ?? item.text,
+      date: item.date ?? "",
+      url: item.source.url
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (year !== currentYear) {
+    await deps.cache.save(albumId, news);
+  }
+
+  return news;
 }
